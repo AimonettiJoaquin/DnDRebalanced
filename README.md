@@ -2,9 +2,43 @@
 
 A client-side Markdown enemy converter for the supplied D&D 2024 armor house rules. Built with React, TypeScript and Vite. No application backend, API key, model or monster database.
 
+Repository: **https://github.com/AimonettiJoaquin/DnDRebalanced**
+
 ## Hosting
 
-Sites is configured to serve the production build from `dist/`, with the project identity retained in `.openai/hosting.json`. The configured URL is https://encounter-forge.sleekapple4097.chatgpt.site. The initial publication is private to the owner and uses the hosting provider's sign-in gate; the converter itself has no user accounts or server-side data storage.
+### Netlify
+
+Production: **https://encounter-forge.netlify.app**
+
+The current Netlify project has sign-in protection enabled (`sso_login`). Open it with an authorized Netlify session. The production deployment was confirmed as `ready` through the Netlify API; anonymous browser verification is blocked by that sign-in gate.
+
+`netlify.toml` configures `npm run build`, publishes only `dist/`, and selects Node.js 22. It includes the SPA fallback and immutable caching for versioned assets.
+
+Continuous deployment uses `AimonettiJoaquin/DnDRebalanced`, production branch `main`. A push to `main` starts a Netlify build; a successful build replaces the published site at the same URL. Failed builds leave the previous publication in place.
+
+Work in a Git clone of that repository, commit the changes, and push them:
+
+```bash
+git add <changed-files>
+git commit -m "Describe the change"
+git push origin main
+```
+
+In this workspace, the Git checkout is `.sites-checkout/`. Open that directory in your editor when making changes you intend to commit. The parent workspace also contains a separate copy of the source files.
+
+For an optional manual deployment using your Netlify account:
+
+```bash
+npx netlify-cli login
+npm run build
+npx netlify-cli deploy --prod --dir=dist --no-build
+```
+
+Link this clone to the existing `encounter-forge` project if the CLI asks. The local project link is stored in `.netlify/`, which is ignored by Git. The build settings are versioned in `netlify.toml`. No runtime environment variables are required.
+
+### Existing Sites deployment
+
+The previous Sites publication remains at https://encounter-forge.sleekapple4097.chatgpt.site. Its project identity is retained in `.openai/hosting.json`; it is private to the owner. The converter itself has no user accounts or server-side data storage.
 
 ## Run locally
 

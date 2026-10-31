@@ -10,3 +10,4 @@ playwright-report/
 .agents/
 .codex/
 .aws/
+.netlify/

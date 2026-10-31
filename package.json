@@ -11,6 +11,8 @@
     "test:browser": "playwright test"
   },
   "dependencies": {
+    "html-to-image": "1.11.13",
+    "jspdf": "4.2.1",
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "react-markdown": "10.1.0",

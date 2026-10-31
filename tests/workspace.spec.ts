@@ -6,6 +6,8 @@ const fixture = readFileSync(
 );
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
+  await page.locator(".rules-disclosure > summary").click();
+  await page.locator(".source-disclosure > summary").click();
 });
 
 test("table-ready demo, HP toggling and transparent formula changes", async ({
@@ -74,13 +76,11 @@ test("JSON retains source, notes, HP mode and Mage Armor slot through reset", as
   await expect(page.getByLabel("Source Markdown", { exact: true })).toHaveValue(
     "",
   );
-  await page
-    .getByLabel("Open project JSON file")
-    .setInputFiles({
-      name: "saved.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(project),
-    });
+  await page.getByLabel("Open project JSON file").setInputFiles({
+    name: "saved.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(project),
+  });
   await expect(
     page.getByRole("combobox", { name: "Defense method", exact: true }),
   ).toHaveValue("mage_armor");
@@ -92,21 +92,17 @@ test("JSON retains source, notes, HP mode and Mage Armor slot through reset", as
 test("file validation and safe preview, with converted re-import protection", async ({
   page,
 }) => {
-  await page
-    .getByLabel("Upload Markdown file")
-    .setInputFiles({
-      name: "bad.txt",
-      mimeType: "text/plain",
-      buffer: Buffer.from("x"),
-    });
+  await page.getByLabel("Upload Markdown file").setInputFiles({
+    name: "bad.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("x"),
+  });
   await expect(page.getByRole("alert")).toContainText("Choose a .md");
-  await page
-    .getByLabel("Upload Markdown file")
-    .setInputFiles({
-      name: "empty.md",
-      mimeType: "text/markdown",
-      buffer: Buffer.from(""),
-    });
+  await page.getByLabel("Upload Markdown file").setInputFiles({
+    name: "empty.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(""),
+  });
   await expect(page.getByRole("alert")).toContainText("empty");
   const remoteRequests: string[] = [];
   page.on("request", (r) => {
@@ -211,13 +207,135 @@ test("desktop layout, no external requests and no browser errors", async ({
 }) => {
   const errors: string[] = [];
   const requests: string[] = [];
+  const origin = new URL(page.url()).origin;
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("request", (r) => {
-    if (!r.url().startsWith("http://127.0.0.1:5173")) requests.push(r.url());
+    if (!r.url().startsWith(origin)) requests.push(r.url());
   });
   await page.reload();
   await expect(page.locator(".statblock")).toContainText("Deadly Leap");
   expect(errors).toEqual([]);
   expect(requests).toEqual([]);
   await page.screenshot({ path: "test-results/desktop.png", fullPage: true });
+});
+
+test("compact file import and rules start closed in a single column", async ({
+  page,
+}) => {
+  await page.reload();
+  await expect(page.locator(".source-editor")).toBeHidden();
+  await expect(
+    page.getByRole("combobox", { name: "Defense method", exact: true }),
+  ).toBeHidden();
+  const boxes = await page.locator(".workspace > .panel").evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width, height: box.height };
+    }),
+  );
+  expect(boxes).toHaveLength(3);
+  expect(boxes[0].height).toBeLessThan(350);
+  expect(boxes[1].height).toBeLessThan(110);
+  expect(boxes[0].x).toBe(boxes[1].x);
+  expect(boxes[1].x).toBe(boxes[2].x);
+  expect(boxes[1].y).toBeGreaterThan(boxes[0].y + boxes[0].height);
+  expect(boxes[2].y).toBeGreaterThan(boxes[1].y + boxes[1].height);
+  await page.locator(".rules-disclosure > summary").focus();
+  await page.keyboard.press("Enter");
+  await page
+    .getByRole("combobox", { name: "Defense method", exact: true })
+    .selectOption("mage_armor");
+  await page.getByLabel("Mage Armor spell-slot level").fill("5");
+  await page.locator(".rules-disclosure > summary").click();
+  await expect(page.locator(".rules-summary")).toContainText(
+    "Mage Armor · slot 5",
+  );
+  await expect(page.locator(".metrics")).toContainText("21");
+});
+
+test("drag-and-drop imports a Markdown file without opening the source editor", async ({
+  page,
+}) => {
+  await page.reload();
+  const data = await page.evaluateHandle((text) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File([text], "Underground_Bulette.md", { type: "text/markdown" }),
+    );
+    return transfer;
+  }, fixture);
+  const zone = page.getByRole("group", { name: "Markdown file drop zone" });
+  await zone.dispatchEvent("dragenter", { dataTransfer: data });
+  await expect(zone).toHaveClass(/dragging/);
+  await zone.dispatchEvent("drop", { dataTransfer: data });
+  await expect(page.locator(".source-file")).toContainText(
+    "Underground_Bulette.md",
+  );
+  await expect(page.locator(".source-editor")).toBeHidden();
+  await expect(page.locator(".statblock")).toContainText("103 (9d10 + 54)");
+  await expect(zone).not.toHaveClass(/dragging/);
+  const invalid = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["x"], "wrong.txt"));
+    return transfer;
+  });
+  await zone.dispatchEvent("drop", { dataTransfer: invalid });
+  await expect(page.getByRole("alert")).toContainText("Choose a .md");
+});
+
+test("visual PNG and PDF download the full creature from any result tab", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Maximum", exact: true }).click();
+  await page.getByRole("tab", { name: "Markdown", exact: true }).click();
+  const pngEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PNG", exact: true }).click();
+  const png = await pngEvent;
+  expect(png.suggestedFilename()).toBe("Bulette_statblock.png");
+  const contents = readFileSync((await png.path())!);
+  expect(contents.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+  expect(contents.readUInt32BE(16)).toBe(1680);
+  expect(contents.readUInt32BE(20)).toBeGreaterThan(1800);
+  await png.saveAs("test-results/exported-bulette.png");
+  await expect(page.locator(".export-footnote").first()).toHaveText(
+    "Converted stat block · Maximum HP",
+  );
+  const pdfEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PDF", exact: true }).click();
+  const pdf = await pdfEvent;
+  expect(pdf.suggestedFilename()).toBe("Bulette_statblock.pdf");
+  const pdfContents = readFileSync((await pdf.path())!);
+  expect(pdfContents.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(pdfContents.length).toBeGreaterThan(20000);
+  await pdf.saveAs("test-results/exported-bulette.pdf");
+  await expect(
+    page.getByLabel("Converted Markdown", { exact: true }),
+  ).toContainText("144 (9d10 + 54; maximum HP)");
+});
+
+test("partial visual exports are labeled, and long stat blocks create multiple PDF pages", async ({
+  page,
+}) => {
+  const extra = Array.from(
+    { length: 20 },
+    (_, i) =>
+      `>***Field Note ${i + 1}.*** This creature moves through deep stone passages and guards its territory until the final intruder leaves.\n>\n`,
+  ).join("");
+  await page
+    .getByLabel("Source Markdown", { exact: true })
+    .fill(fixture + "\n>### Field Notes\n" + extra);
+  await page
+    .getByRole("combobox", { name: "Defense method", exact: true })
+    .selectOption("review");
+  await expect(page.locator(".export-partial")).toContainText(
+    "Partial conversion",
+  );
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PDF", exact: true }).click();
+  const pdf = await downloading;
+  expect(pdf.suggestedFilename()).toBe("Bulette_partial_statblock.pdf");
+  const contents = readFileSync((await pdf.path())!, "latin1");
+  const count = contents.match(/\/Type \/Page\b/g)?.length ?? 0;
+  expect(count).toBeGreaterThanOrEqual(3);
+  await pdf.saveAs("test-results/exported-long-creature.pdf");
 });

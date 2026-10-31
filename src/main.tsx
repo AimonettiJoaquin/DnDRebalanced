@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import demo from "./bulette.md?raw";
 import { convert, reviewReport, type Field, type Issue } from "./converter";
+import { downloadStatBlock, type StatBlockFormat } from "./statblock-export";
 import {
   abilities,
   armor,
@@ -66,6 +67,7 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
       </>
     ),
     arrow: <path d="M4 12h16m-6-6 6 6-6 6" />,
+    chevron: <path d="m6 9 6 6 6-6" />,
     book: (
       <>
         <path d="M12 5C9 2 4 3 2 4v15c4-1 8-1 10 2 2-3 6-3 10-2V4c-2-1-7-2-10 1Z" />
@@ -87,6 +89,32 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
     >
       {paths[name] || paths.spark}
     </svg>
+  );
+}
+
+function CreatureMarkdown({
+  markdown,
+  className,
+}: {
+  markdown: string;
+  className: string;
+}) {
+  return (
+    <div className={className}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        skipHtml
+        components={{
+          img: ({ alt }) => (
+            <span className="omitted-image">
+              {alt ? `[Image: ${alt}]` : "[Image omitted]"}
+            </span>
+          ),
+        }}
+      >
+        {markdown}
+      </ReactMarkdown>
+    </div>
   );
 }
 function NumberInput({
@@ -271,6 +299,11 @@ function App() {
   const [effectName, setEffectName] = useState("");
   const [effectValue, setEffectValue] = useState<number | null>(null);
   const [expandedField, setExpandedField] = useState<string | null>(null);
+  const [sourceFileName, setSourceFileName] = useState("Bulette_demo.md");
+  const [isDragging, setIsDragging] = useState(false);
+  const [exporting, setExporting] = useState<StatBlockFormat | null>(null);
+  const dragDepth = useRef(0);
+  const exportSheet = useRef<HTMLDivElement>(null);
   const markdownUpload = useRef<HTMLInputElement>(null),
     projectUpload = useRef<HTMLInputElement>(null);
   const conversion = useMemo(() => {
@@ -291,6 +324,7 @@ function App() {
   };
   const changeSource = (text: string) => {
     setSource(text);
+    setSourceFileName(text.trim() ? "Pasted Markdown" : "");
     setIsDemo(false);
     setSettings((s) => ({
       ...s,
@@ -336,6 +370,23 @@ function App() {
       setTab("markdown");
     }
   };
+  const exportVisual = async (format: StatBlockFormat) => {
+    if (!result || result.marked || !exportSheet.current || exporting) return;
+    setExporting(format);
+    setError("");
+    try {
+      const name = await downloadStatBlock(
+        exportSheet.current,
+        format,
+        `${baseName}${result.issues.length ? "_partial" : ""}`,
+      );
+      setStatus(`Downloaded ${name}`);
+    } catch (e) {
+      setError(`Could not export the stat block: ${(e as Error).message}`);
+    } finally {
+      setExporting(null);
+    }
+  };
   const upload = async (file: File | undefined, project: boolean) => {
     if (!file) return;
     setError("");
@@ -355,10 +406,12 @@ function App() {
         setSource(imported.source);
         setSettings(imported.settings);
         setIsDemo(false);
+        setSourceFileName("Source from project");
         setExpandedField(null);
       } else {
         if (!text.trim()) throw new Error("The Markdown file is empty.");
         changeSource(text);
+        setSourceFileName(file.name);
       }
       setStatus(`Opened ${file.name}`);
     } catch (e) {
@@ -428,6 +481,7 @@ function App() {
               setSource(demo);
               setSettings(demoSettings());
               setIsDemo(true);
+              setSourceFileName("Bulette_demo.md");
               setStatus("User-supplied Bulette demo loaded.");
               setError("");
               setExpandedField(null);
@@ -441,6 +495,7 @@ function App() {
               setSource("");
               setSettings(defaults());
               setIsDemo(false);
+              setSourceFileName("");
               setStatus("Session cleared.");
               setError("");
               setExpandedField(null);
@@ -496,12 +551,49 @@ function App() {
               </div>
               <span className="tag">MARKDOWN</span>
             </div>
-            <div className="source-actions">
+            <div
+              className={`file-drop ${isDragging ? "dragging" : ""}`}
+              role="group"
+              aria-label="Markdown file drop zone"
+              onDragEnter={(e) => {
+                e.preventDefault();
+                dragDepth.current++;
+                setIsDragging(true);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "copy";
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                dragDepth.current = Math.max(0, dragDepth.current - 1);
+                if (!dragDepth.current) setIsDragging(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                dragDepth.current = 0;
+                setIsDragging(false);
+                if (e.dataTransfer.files.length !== 1) {
+                  setError("Drop one .md file at a time.");
+                  return;
+                }
+                void upload(e.dataTransfer.files[0], false);
+              }}
+            >
+              <span className="drop-icon">
+                <Icon name="upload" size={24} />
+              </span>
+              <div className="drop-copy">
+                <strong>
+                  {isDragging
+                    ? "Release to open your creature"
+                    : "Drop your .md file here"}
+                </strong>
+                <span>Markdown · up to 250 KB · or choose a file</span>
+              </div>
               <button onClick={() => markdownUpload.current?.click()}>
-                <Icon name="upload" />
                 Upload .md
               </button>
-              <span>or paste below</span>
             </div>
             <input
               ref={markdownUpload}
@@ -514,30 +606,41 @@ function App() {
                 e.target.value = "";
               }}
             />
-            {isDemo && (
-              <div className="demo-note">
+            {source.trim() && (
+              <div className="source-file">
                 <Icon name="book" size={15} />
-                User-supplied Bulette demo · not verified official content
+                <strong>{sourceFileName}</strong>
+                <span>{source.length.toLocaleString()} characters</span>
+                {isDemo && (
+                  <small>
+                    User-supplied demo · not verified official content
+                  </small>
+                )}
               </div>
             )}
-            <label className="sr-only" htmlFor="source">
-              Source Markdown
-            </label>
-            <textarea
-              id="source"
-              className="source-editor"
-              value={source}
-              maxLength={maxFileSize}
-              onChange={(e) => changeSource(e.target.value)}
-              spellCheck={false}
-              placeholder={
-                "Paste the original Markdown stat block here…\n\nInclude all six ability scores, HP dice, and original PB."
-              }
-            />
-            <div className="source-footer">
-              <span>{source.length.toLocaleString()} characters</span>
-              <span>Original → fresh calculation</span>
-            </div>
+            <details className="source-disclosure">
+              <summary>
+                Edit or paste Markdown <Icon name="chevron" size={16} />
+              </summary>
+              <label className="sr-only" htmlFor="source">
+                Source Markdown
+              </label>
+              <textarea
+                id="source"
+                className="source-editor"
+                value={source}
+                maxLength={maxFileSize}
+                onChange={(e) => changeSource(e.target.value)}
+                spellCheck={false}
+                placeholder={
+                  "Paste the original Markdown stat block here…\n\nInclude all six ability scores, HP dice, and original PB."
+                }
+              />
+              <div className="source-footer">
+                <span>{source.length.toLocaleString()} characters</span>
+                <span>Original → fresh calculation</span>
+              </div>
+            </details>
             <div className="project-actions">
               <button
                 className="quiet small"
@@ -581,386 +684,413 @@ function App() {
             className="panel controls-panel"
             aria-labelledby="controls-title"
           >
-            <div className="panel-heading">
-              <div>
-                <span className="step">02</span>
-                <h2 id="controls-title">Conversion rules</h2>
-              </div>
-              <Icon name="spark" />
-            </div>
-            <div className="controls-body">
-              <fieldset disabled={!!result?.marked}>
-                <legend className="eyebrow">PHYSICAL DEFENSE</legend>
-                <label className="field">
-                  Defense method
-                  <select
-                    value={settings.method}
-                    onChange={(e) =>
-                      changeMethod(e.target.value as Settings["method"])
-                    }
-                  >
-                    {Object.entries(methods).map(([id, name]) => (
-                      <option key={id} value={id}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {["natural", "worn"].includes(settings.method) && (
-                  <>
-                    <div className="two-col">
-                      <label className="field">
-                        {settings.method === "natural"
-                          ? "Physical equivalent"
-                          : "Armor"}
-                        <select
-                          value={settings.armorId}
-                          onChange={(e) =>
-                            changeSettings({
-                              armorId: e.target.value as Settings["armorId"],
-                            })
+            <details className="rules-disclosure">
+              <summary className="panel-heading">
+                <div>
+                  <span className="step">02</span>
+                  <h2 id="controls-title">Conversion rules</h2>
+                </div>
+                <span className="rules-summary">
+                  <span>
+                    {methods[settings.method]}
+                    {["natural", "worn"].includes(settings.method)
+                      ? ` · ${armor.find((a) => a.id === settings.armorId)?.name}`
+                      : settings.method === "mage_armor"
+                        ? ` · slot ${settings.slot ?? "?"}`
+                        : ""}
+                    <small>
+                      {settings.hpMode === "average" ? "Average" : "Maximum"} HP
+                      · click to adjust
+                    </small>
+                  </span>
+                  <Icon name="chevron" />
+                </span>
+              </summary>
+              <div className="controls-body">
+                <fieldset disabled={!!result?.marked}>
+                  <legend className="eyebrow">PHYSICAL DEFENSE</legend>
+                  <label className="field">
+                    Defense method
+                    <select
+                      value={settings.method}
+                      onChange={(e) =>
+                        changeMethod(e.target.value as Settings["method"])
+                      }
+                    >
+                      {Object.entries(methods).map(([id, name]) => (
+                        <option key={id} value={id}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {["natural", "worn"].includes(settings.method) && (
+                    <>
+                      <div className="two-col">
+                        <label className="field">
+                          {settings.method === "natural"
+                            ? "Physical equivalent"
+                            : "Armor"}
+                          <select
+                            value={settings.armorId}
+                            onChange={(e) =>
+                              changeSettings({
+                                armorId: e.target.value as Settings["armorId"],
+                              })
+                            }
+                          >
+                            {armor.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="field">
+                          Enhancement
+                          <select
+                            value={settings.enhancement}
+                            onChange={(e) =>
+                              changeSettings({
+                                enhancement: Number(e.target.value),
+                              })
+                            }
+                          >
+                            {[0, 1, 2, 3].map((n) => (
+                              <option key={n} value={n}>
+                                {n === 0 ? "None" : `+${n}`}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      {settings.method === "worn" && (
+                        <Check
+                          label="Proficient in this worn armor"
+                          checked={settings.proficient}
+                          onChange={(proficient) =>
+                            changeSettings({ proficient })
                           }
-                        >
-                          {armor.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                        />
+                      )}
+                      {settings.method === "natural" && (
+                        <div className="guidance">
+                          <strong>Choose by physical protection</strong>
+                          <p>
+                            Skin, fur, flexible hide → light.
+                            <br />
+                            Chitin, layered plates, rigid scales → medium.
+                            <br />
+                            Steel-like shells and carapaces → heavy.
+                          </p>
+                          <small>
+                            Suggestions for a DM ruling. No automatic magical
+                            enhancement or equipment properties.
+                          </small>
+                        </div>
+                      )}
                       <label className="field">
-                        Enhancement
+                        Reason for the equivalent
+                        <input
+                          value={settings.rationale}
+                          onChange={(e) =>
+                            changeSettings({ rationale: e.target.value })
+                          }
+                          placeholder="e.g. Thick, overlapping shell plates"
+                          maxLength={2000}
+                        />
+                      </label>
+                    </>
+                  )}
+                  {settings.method === "mage_armor" && (
+                    <>
+                      <NumberInput
+                        label="Mage Armor spell-slot level"
+                        min={1}
+                        max={9}
+                        value={settings.slot}
+                        onChange={(slot) => changeSettings({ slot })}
+                      />
+                      <p className="help">
+                        Slots 1–2: 13 + DEX (cap 3) + PB.
+                        <br />
+                        Slots 3–4: 15 + DEX (cap 1) + PB.
+                        <br />
+                        Slots 5–9: 17 + PB, DEX ignored.
+                        <br />
+                        Uses the target’s PB. Normal spell eligibility still
+                        applies.
+                      </p>
+                    </>
+                  )}
+                  {settings.method === "review" && (
+                    <>
+                      <p className="help">
+                        No automatic formula is defined for special
+                        base-replacing effects. Enter an override and explain
+                        the ruling, or leave AC unresolved.
+                      </p>
+                      <NumberInput
+                        label="Manual AC override"
+                        min={1}
+                        value={settings.manualAC}
+                        onChange={(manualAC) => changeSettings({ manualAC })}
+                      />
+                      <label className="field">
+                        Override reason
+                        <input
+                          value={settings.manualACReason}
+                          onChange={(e) =>
+                            changeSettings({ manualACReason: e.target.value })
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
+                  {["ordinary", "monk", "barbarian"].includes(
+                    settings.method,
+                  ) && (
+                    <p className="help">
+                      {settings.method === "ordinary"
+                        ? "10 + min(DEX modifier, 5) + PB."
+                        : `min(10 + DEX modifier + ${settings.method === "monk" ? "WIS" : "CON"} modifier, 15) + PB.`}
+                      {settings.method === "monk"
+                        ? " Armor and shields are unavailable."
+                        : settings.method === "barbarian"
+                          ? " Armor is unavailable; a shield is allowed."
+                          : " Negative DEX still applies."}
+                    </p>
+                  )}
+                  <div className="shield-row">
+                    <Check
+                      label="Equip shield"
+                      checked={settings.shield}
+                      onChange={(shield) =>
+                        changeSettings({ shield, shieldEnhancement: 0 })
+                      }
+                    />
+                    {settings.shield && (
+                      <label className="field compact">
+                        Shield enhancement
                         <select
-                          value={settings.enhancement}
+                          value={settings.shieldEnhancement}
                           onChange={(e) =>
                             changeSettings({
-                              enhancement: Number(e.target.value),
+                              shieldEnhancement: Number(e.target.value),
                             })
                           }
                         >
                           {[0, 1, 2, 3].map((n) => (
                             <option key={n} value={n}>
-                              {n === 0 ? "None" : `+${n}`}
+                              {n
+                                ? `+${n} (${n + 1} AC total)`
+                                : "Normal (+1 AC)"}
                             </option>
                           ))}
                         </select>
                       </label>
-                    </div>
-                    {settings.method === "worn" && (
-                      <Check
-                        label="Proficient in this worn armor"
-                        checked={settings.proficient}
-                        onChange={(proficient) =>
-                          changeSettings({ proficient })
-                        }
-                      />
                     )}
-                    {settings.method === "natural" && (
-                      <div className="guidance">
-                        <strong>Choose by physical protection</strong>
-                        <p>
-                          Skin, fur, flexible hide → light.
-                          <br />
-                          Chitin, layered plates, rigid scales → medium.
-                          <br />
-                          Steel-like shells and carapaces → heavy.
-                        </p>
-                        <small>
-                          Suggestions for a DM ruling. No automatic magical
-                          enhancement or equipment properties.
-                        </small>
+                  </div>
+                  <details>
+                    <summary>
+                      Other confirmed AC effects
+                      {settings.effects.length
+                        ? ` (${settings.effects.length})`
+                        : ""}
+                    </summary>
+                    <p className="help">
+                      Additive effects only; each needs a name. These do not
+                      replace the base defense.
+                    </p>
+                    {settings.effects.map((effect, i) => (
+                      <div className="effect" key={i}>
+                        <span>
+                          {effect.name} <b>{signed(effect.value)}</b>
+                        </span>
+                        <button
+                          className="quiet small"
+                          aria-label={`Remove ${effect.name}`}
+                          onClick={() =>
+                            changeSettings({
+                              effects: settings.effects.filter(
+                                (_, j) => j !== i,
+                              ),
+                            })
+                          }
+                        >
+                          Remove
+                        </button>
                       </div>
-                    )}
+                    ))}
                     <label className="field">
-                      Reason for the equivalent
+                      Effect name
                       <input
-                        value={settings.rationale}
-                        onChange={(e) =>
-                          changeSettings({ rationale: e.target.value })
-                        }
-                        placeholder="e.g. Thick, overlapping shell plates"
-                        maxLength={2000}
+                        value={effectName}
+                        onChange={(e) => setEffectName(e.target.value)}
+                        maxLength={100}
                       />
                     </label>
-                  </>
-                )}
-                {settings.method === "mage_armor" && (
-                  <>
                     <NumberInput
-                      label="Mage Armor spell-slot level"
-                      min={1}
-                      max={9}
-                      value={settings.slot}
-                      onChange={(slot) => changeSettings({ slot })}
+                      label="Signed AC bonus"
+                      value={effectValue}
+                      onChange={setEffectValue}
                     />
-                    <p className="help">
-                      Slots 1–2: 13 + DEX (cap 3) + PB.
-                      <br />
-                      Slots 3–4: 15 + DEX (cap 1) + PB.
-                      <br />
-                      Slots 5–9: 17 + PB, DEX ignored.
-                      <br />
-                      Uses the target’s PB. Normal spell eligibility still
-                      applies.
-                    </p>
-                  </>
-                )}
-                {settings.method === "review" && (
-                  <>
-                    <p className="help">
-                      No automatic formula is defined for special base-replacing
-                      effects. Enter an override and explain the ruling, or
-                      leave AC unresolved.
-                    </p>
-                    <NumberInput
-                      label="Manual AC override"
-                      min={1}
-                      value={settings.manualAC}
-                      onChange={(manualAC) => changeSettings({ manualAC })}
-                    />
-                    <label className="field">
-                      Override reason
-                      <input
-                        value={settings.manualACReason}
-                        onChange={(e) =>
-                          changeSettings({ manualACReason: e.target.value })
-                        }
-                      />
-                    </label>
-                  </>
-                )}
-                {["ordinary", "monk", "barbarian"].includes(
-                  settings.method,
-                ) && (
+                    <button
+                      className="small"
+                      disabled={
+                        !effectName.trim() ||
+                        effectValue === null ||
+                        !Number.isSafeInteger(effectValue)
+                      }
+                      onClick={() => {
+                        changeSettings({
+                          effects: [
+                            ...settings.effects,
+                            { name: effectName.trim(), value: effectValue! },
+                          ],
+                        });
+                        setEffectName("");
+                        setEffectValue(null);
+                      }}
+                    >
+                      Add effect
+                    </button>
+                  </details>
+                </fieldset>
+                <fieldset disabled={!!result?.marked}>
+                  <legend className="eyebrow">HIT POINTS</legend>
+                  <div
+                    className="segmented"
+                    role="group"
+                    aria-label="Hit Points mode"
+                  >
+                    <button
+                      aria-pressed={settings.hpMode === "average"}
+                      className={
+                        settings.hpMode === "average" ? "selected" : ""
+                      }
+                      onClick={() => changeSettings({ hpMode: "average" })}
+                    >
+                      Average <span>default</span>
+                    </button>
+                    <button
+                      aria-pressed={settings.hpMode === "maximum"}
+                      className={
+                        settings.hpMode === "maximum" ? "selected" : ""
+                      }
+                      onClick={() => changeSettings({ hpMode: "maximum" })}
+                    >
+                      Maximum
+                    </button>
+                  </div>
                   <p className="help">
-                    {settings.method === "ordinary"
-                      ? "10 + min(DEX modifier, 5) + PB."
-                      : `min(10 + DEX modifier + ${settings.method === "monk" ? "WIS" : "CON"} modifier, 15) + PB.`}
-                    {settings.method === "monk"
-                      ? " Armor and shields are unavailable."
-                      : settings.method === "barbarian"
-                        ? " Armor is unavailable; a shield is allowed."
-                        : " Negative DEX still applies."}
+                    Same Hit Dice. New CON contribution.{" "}
+                    {settings.hpMode === "average"
+                      ? "Exact dice averages, rounded down once."
+                      : "Maximum HP changes HP only; damage stays averaged."}
                   </p>
-                )}
-                <div className="shield-row">
+                  {result?.hpExtra !== undefined && result.hpExtra !== 0 && (
+                    <Check
+                      label={`Confirm fixed extra HP ${signed(result.hpExtra)}`}
+                      checked={settings.confirmHPExtra}
+                      onChange={(confirmHPExtra) =>
+                        changeSettings({ confirmHPExtra })
+                      }
+                    />
+                  )}
+                </fieldset>
+                <details
+                  open={
+                    !!result?.issues.some(
+                      (i) =>
+                        i.id === "pb:original" || i.id.startsWith("modifier:"),
+                    )
+                  }
+                >
+                  <summary>Original formulas & proficiency</summary>
+                  <NumberInput
+                    label="Resolve original PB"
+                    value={settings.originalPB}
+                    min={1}
+                    onChange={(originalPB) => changeSettings({ originalPB })}
+                    hint="Leave blank to use consistent source PB entries."
+                  />
+                  {result?.parsed.cr !== undefined && (
+                    <Check
+                      label={`Confirm original CR ${result.parsed.cr} fallback for missing PB`}
+                      checked={settings.confirmCRFallback}
+                      onChange={(confirmCRFallback) =>
+                        changeSettings({ confirmCRFallback })
+                      }
+                    />
+                  )}
                   <Check
-                    label="Equip shield"
-                    checked={settings.shield}
-                    onChange={(shield) =>
-                      changeSettings({ shield, shieldEnhancement: 0 })
+                    label="Use score-derived modifiers to resolve listed modifier conflicts"
+                    checked={settings.acceptScoreModifiers}
+                    onChange={(acceptScoreModifiers) =>
+                      changeSettings({ acceptScoreModifiers })
                     }
                   />
-                  {settings.shield && (
-                    <label className="field compact">
-                      Shield enhancement
-                      <select
-                        value={settings.shieldEnhancement}
-                        onChange={(e) =>
-                          changeSettings({
-                            shieldEnhancement: Number(e.target.value),
-                          })
-                        }
-                      >
-                        {[0, 1, 2, 3].map((n) => (
-                          <option key={n} value={n}>
-                            {n ? `+${n} (${n + 1} AC total)` : "Normal (+1 AC)"}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                </div>
-                <details>
-                  <summary>
-                    Other confirmed AC effects
-                    {settings.effects.length
-                      ? ` (${settings.effects.length})`
-                      : ""}
-                  </summary>
+                  <Check
+                    label="Continue the proficiency pattern beyond 30 HD"
+                    checked={settings.extendPB}
+                    onChange={(extendPB) => changeSettings({ extendPB })}
+                  />
                   <p className="help">
-                    Additive effects only; each needs a name. These do not
-                    replace the base defense.
+                    Enemy effective level is the unchanged number of Hit Dice.
+                    CR and XP stay unchanged and are not a new difficulty
+                    assessment.
                   </p>
-                  {settings.effects.map((effect, i) => (
-                    <div className="effect" key={i}>
-                      <span>
-                        {effect.name} <b>{signed(effect.value)}</b>
-                      </span>
-                      <button
-                        className="quiet small"
-                        aria-label={`Remove ${effect.name}`}
-                        onClick={() =>
-                          changeSettings({
-                            effects: settings.effects.filter((_, j) => j !== i),
-                          })
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
+                </details>
+                <details>
+                  <summary>DM notes</summary>
                   <label className="field">
-                    Effect name
-                    <input
-                      value={effectName}
-                      onChange={(e) => setEffectName(e.target.value)}
-                      maxLength={100}
+                    Notes saved in project & export metadata
+                    <textarea
+                      rows={3}
+                      value={settings.notes}
+                      onChange={(e) =>
+                        changeSettings({ notes: e.target.value })
+                      }
+                      maxLength={10000}
                     />
                   </label>
-                  <NumberInput
-                    label="Signed AC bonus"
-                    value={effectValue}
-                    onChange={setEffectValue}
-                  />
-                  <button
-                    className="small"
-                    disabled={
-                      !effectName.trim() ||
-                      effectValue === null ||
-                      !Number.isSafeInteger(effectValue)
-                    }
-                    onClick={() => {
-                      changeSettings({
-                        effects: [
-                          ...settings.effects,
-                          { name: effectName.trim(), value: effectValue! },
-                        ],
-                      });
-                      setEffectName("");
-                      setEffectValue(null);
-                    }}
-                  >
-                    Add effect
-                  </button>
                 </details>
-              </fieldset>
-              <fieldset disabled={!!result?.marked}>
-                <legend className="eyebrow">HIT POINTS</legend>
-                <div
-                  className="segmented"
-                  role="group"
-                  aria-label="Hit Points mode"
-                >
-                  <button
-                    aria-pressed={settings.hpMode === "average"}
-                    className={settings.hpMode === "average" ? "selected" : ""}
-                    onClick={() => changeSettings({ hpMode: "average" })}
-                  >
-                    Average <span>default</span>
-                  </button>
-                  <button
-                    aria-pressed={settings.hpMode === "maximum"}
-                    className={settings.hpMode === "maximum" ? "selected" : ""}
-                    onClick={() => changeSettings({ hpMode: "maximum" })}
-                  >
-                    Maximum
-                  </button>
-                </div>
-                <p className="help">
-                  Same Hit Dice. New CON contribution.{" "}
-                  {settings.hpMode === "average"
-                    ? "Exact dice averages, rounded down once."
-                    : "Maximum HP changes HP only; damage stays averaged."}
-                </p>
-                {result?.hpExtra !== undefined && result.hpExtra !== 0 && (
-                  <Check
-                    label={`Confirm fixed extra HP ${signed(result.hpExtra)}`}
-                    checked={settings.confirmHPExtra}
-                    onChange={(confirmHPExtra) =>
-                      changeSettings({ confirmHPExtra })
-                    }
-                  />
-                )}
-              </fieldset>
-              <details
-                open={
-                  !!result?.issues.some(
-                    (i) =>
-                      i.id === "pb:original" || i.id.startsWith("modifier:"),
-                  )
-                }
-              >
-                <summary>Original formulas & proficiency</summary>
-                <NumberInput
-                  label="Resolve original PB"
-                  value={settings.originalPB}
-                  min={1}
-                  onChange={(originalPB) => changeSettings({ originalPB })}
-                  hint="Leave blank to use consistent source PB entries."
-                />
-                {result?.parsed.cr !== undefined && (
-                  <Check
-                    label={`Confirm original CR ${result.parsed.cr} fallback for missing PB`}
-                    checked={settings.confirmCRFallback}
-                    onChange={(confirmCRFallback) =>
-                      changeSettings({ confirmCRFallback })
-                    }
-                  />
-                )}
-                <Check
-                  label="Use score-derived modifiers to resolve listed modifier conflicts"
-                  checked={settings.acceptScoreModifiers}
-                  onChange={(acceptScoreModifiers) =>
-                    changeSettings({ acceptScoreModifiers })
-                  }
-                />
-                <Check
-                  label="Continue the proficiency pattern beyond 30 HD"
-                  checked={settings.extendPB}
-                  onChange={(extendPB) => changeSettings({ extendPB })}
-                />
-                <p className="help">
-                  Enemy effective level is the unchanged number of Hit Dice. CR
-                  and XP stay unchanged and are not a new difficulty assessment.
-                </p>
-              </details>
-              <details>
-                <summary>DM notes</summary>
-                <label className="field">
-                  Notes saved in project & export metadata
-                  <textarea
-                    rows={3}
-                    value={settings.notes}
-                    onChange={(e) => changeSettings({ notes: e.target.value })}
-                    maxLength={10000}
-                  />
-                </label>
-              </details>
-              <details className="references">
-                <summary>Armor & proficiency reference</summary>
-                <table>
-                  <caption>Custom armor values</caption>
-                  <thead>
-                    <tr>
-                      <th>Equivalent</th>
-                      <th>Base</th>
-                      <th>DEX</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {armor.map((a) => (
-                      <tr key={a.id}>
-                        <td>{a.name}</td>
-                        <td>{a.base}</td>
-                        <td>
-                          {a.dexCap === null ? "Ignored" : `Cap +${a.dexCap}`}
-                        </td>
+                <details className="references">
+                  <summary>Armor & proficiency reference</summary>
+                  <table>
+                    <caption>Custom armor values</caption>
+                    <thead>
+                      <tr>
+                        <th>Equivalent</th>
+                        <th>Base</th>
+                        <th>DEX</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <p className="help">
-                  Applicable PB is added to the base. Heavy armor ignores all
-                  DEX, including negative values. Hide and Ring Mail have no
-                  defined values.
-                </p>
-                <p className="help">
-                  1–4 HD +2 · 5–8 +3 · 9–12 +4 · 13–16 +5 · 17–20 +6 · 21–24 +7
-                  · 25–28 +8 · 29–30 +9.
-                </p>
-              </details>
-            </div>
+                    </thead>
+                    <tbody>
+                      {armor.map((a) => (
+                        <tr key={a.id}>
+                          <td>{a.name}</td>
+                          <td>{a.base}</td>
+                          <td>
+                            {a.dexCap === null ? "Ignored" : `Cap +${a.dexCap}`}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="help">
+                    Applicable PB is added to the base. Heavy armor ignores all
+                    DEX, including negative values. Hide and Ring Mail have no
+                    defined values.
+                  </p>
+                  <p className="help">
+                    1–4 HD +2 · 5–8 +3 · 9–12 +4 · 13–16 +5 · 17–20 +6 · 21–24
+                    +7 · 25–28 +8 · 29–30 +9.
+                  </p>
+                </details>
+              </div>
+            </details>
           </section>
           <section
             className="panel result-panel"
@@ -1117,21 +1247,10 @@ function App() {
                   tabIndex={0}
                 >
                   {tab === "preview" && (
-                    <div className="statblock">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        skipHtml
-                        components={{
-                          img: ({ alt }) => (
-                            <span className="omitted-image">
-                              {alt ? `[Image: ${alt}]` : "[Image omitted]"}
-                            </span>
-                          ),
-                        }}
-                      >
-                        {result.markdown}
-                      </ReactMarkdown>
-                    </div>
+                    <CreatureMarkdown
+                      markdown={result.markdown}
+                      className="statblock"
+                    />
                   )}
                   {tab === "markdown" && (
                     <>
@@ -1222,45 +1341,96 @@ function App() {
                   </div>
                 )}
                 <div className="export-actions">
-                  <button
-                    className="primary"
-                    disabled={!exportReady}
-                    onClick={() => void copy()}
+                  <div
+                    className="visual-downloads"
+                    role="group"
+                    aria-label="Download visual stat block"
                   >
-                    <Icon name="copy" />
-                    Copy Markdown
-                  </button>
-                  <button
-                    disabled={!exportReady}
-                    onClick={() =>
-                      result &&
-                      download(result.markdown, `${baseName}_converted.md`)
-                    }
-                  >
-                    <Icon name="download" />
-                    Download .md
-                  </button>
-                  <button
-                    className="quiet small"
-                    disabled={!exportReady}
-                    onClick={() =>
-                      result &&
-                      download(reviewReport(result), `${baseName}_review.md`)
-                    }
-                  >
-                    Review report
-                  </button>
+                    <div className="export-caption">
+                      <strong>Take it to the table</strong>
+                      <span>Download the complete, styled stat block.</span>
+                    </div>
+                    <button
+                      className="primary"
+                      disabled={!exportReady || !!exporting}
+                      onClick={() => void exportVisual("png")}
+                    >
+                      <Icon name="download" />
+                      {exporting === "png" ? "Preparing PNG…" : "Download PNG"}
+                    </button>
+                    <button
+                      disabled={!exportReady || !!exporting}
+                      onClick={() => void exportVisual("pdf")}
+                    >
+                      <Icon name="download" />
+                      {exporting === "pdf" ? "Preparing PDF…" : "Download PDF"}
+                    </button>
+                  </div>
+                  <div className="markdown-downloads">
+                    <button disabled={!exportReady} onClick={() => void copy()}>
+                      <Icon name="copy" />
+                      Copy Markdown
+                    </button>
+                    <button
+                      disabled={!exportReady}
+                      onClick={() =>
+                        result &&
+                        download(result.markdown, `${baseName}_converted.md`)
+                      }
+                    >
+                      <Icon name="download" />
+                      Download .md
+                    </button>
+                    <button
+                      className="quiet small"
+                      disabled={!exportReady}
+                      onClick={() =>
+                        result &&
+                        download(reviewReport(result), `${baseName}_review.md`)
+                      }
+                    >
+                      Review report
+                    </button>
+                  </div>
                 </div>
               </>
             )}
           </section>
         </div>
+        {result && !result.marked && (
+          <div className="export-stage" aria-hidden="true" inert>
+            <div className="export-sheet" ref={exportSheet}>
+              <div className="export-masthead">
+                <span>ENCOUNTER FORGE</span>
+                <span>D&D 2024 · HOUSE RULES</span>
+              </div>
+              {!!result.issues.length && (
+                <div className="export-partial">
+                  Partial conversion · {result.issues.length} unresolved fields.
+                  See the separate review report.
+                </div>
+              )}
+              <CreatureMarkdown
+                markdown={result.markdown}
+                className="export-statblock"
+              />
+              <div className="export-footnote">
+                Converted stat block ·{" "}
+                {settings.hpMode === "maximum" ? "Maximum" : "Average"} HP
+                {settings.method === "mage_armor"
+                  ? ` · Mage Armor slot ${settings.slot}`
+                  : ""}
+                {settings.extendPB ? " · Extended proficiency pattern" : ""}
+              </div>
+            </div>
+          </div>
+        )}
         <footer>
           <span>
             <Icon name="shield" size={14} /> Built for rulings, with the math
             attached.
           </span>
-          <span>No accounts. No database. No network calls.</span>
+          <span>Local conversion. Your files stay in your browser.</span>
         </footer>
       </main>
     </>

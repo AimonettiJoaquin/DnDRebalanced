@@ -58,16 +58,18 @@ npm run preview      # serve the production build locally
 npm run test:browser # Chromium workflow, accessibility and responsive checks
 ```
 
-Browser tests use `/usr/bin/chromium`. Set `CHROMIUM_PATH` to another Chromium executable if needed. Playwright starts its own local Vite server when one is not already running. In a restricted execution environment, browser tests need permission to reach loopback and launch Chromium.
+Browser tests use `/usr/bin/chromium`. Set `CHROMIUM_PATH` to another Chromium executable if needed. Playwright starts its own local Vite server when one is not already running. Set `PLAYWRIGHT_PORT=5174` when port 5173 is already in use. In a restricted execution environment, browser tests need permission to reach loopback and launch Chromium.
 
 ## Use
 
-1. Paste an original stat block or upload `.md`. The initial Bulette is the **user-supplied regression fixture**, not verified official content.
-2. Choose a defense method and, for natural or worn armor, a physical equivalent. Old AC is an optional comparison, never an input to the defense formula. If missing, a calculated AC line is inserted beside HP.
+1. Drag a `.md` file onto the compact drop zone or choose **Upload .md**. To paste or edit the source, expand **Edit or paste Markdown**. The initial Bulette is the **user-supplied regression fixture**, not verified official content.
+2. Expand **Conversion rules** to choose a defense method and, for natural or worn armor, a physical equivalent. The closed section summarizes the current defense and HP mode. Old AC is an optional comparison, never an input to the defense formula. If missing, a calculated AC line is inserted beside HP.
 3. Review the six rounded scores, unchanged HD count, new PB, AC and HP. Average HP is the default. Maximum HP changes HP only.
 4. Inspect **Changes** for original/new values, arithmetic, and whether the formula was explicit, uniquely inferred or manually confirmed. Every supported dependent field offers a formula override.
 5. Resolve review cards by choosing an ability, PB multiplier and fixed bonus, or explicitly preserving a fixed field. Record a reason. Resolve invalid scores and unsupported source formats in the source editor. Unknown numeric traits may be acknowledged as independent; otherwise keep them unresolved for manual editing.
-6. Copy or download the full converted Markdown. Partial exports are marked. Download the separate review report for unresolved fields and formula decisions.
+6. Download the complete, styled creature using **Download PNG** or **Download PDF**, or keep the original Markdown workflow with **Copy Markdown** and **Download .md**. PNG exports use a consistent, high-resolution parchment layout; PDF exports paginate long creatures in A4 format and prefer breaks between paragraphs. Both work from any result tab. Partial visual exports have an explicit banner and filename; download the separate review report for unresolved fields and formula decisions.
+
+The workspace uses a single vertical column with compact file import and collapsed rules. Its parchment, wood and copper palette is also used in visual exports. All export processing takes place in the browser. The PDF contains images of the formatted stat block; use Markdown for editable text. Extremely large visual exports show an error and retain the Markdown download instead of truncating the creature.
 
 **Save project JSON** preserves the original Markdown, HP mode, defense settings, Mage Armor slot, rationale, notes, formula decisions and acknowledgements. Open that project to continue later. State is held in memory until saved; Reset clears it. Editing the source starts a new inference pass and clears source-specific decisions, original-PB overrides and HP-extra confirmations.
 
@@ -91,5 +93,6 @@ Converted Markdown has an inert conversion marker and encoded metadata. Reopenin
 - `src/rules.ts`: custom armor, defense formulas, PB, rounding and versioned project schema.
 - `src/converter.ts`: immutable source parser, explicit/inferred formulas, source-span edits and review exports.
 - `src/main.tsx` and `src/style.css`: responsive workspace, safe preview and local file/clipboard actions.
+- `src/statblock-export.ts`: local PNG rendering and paginated PDF export; its rendering libraries load only when requested.
 - `src/bulette.md`: exact supplied fixture.
 - `src/*.test.ts` and `tests/workspace.spec.ts`: rule/conversion regressions and real Chromium workflows.

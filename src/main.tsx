@@ -5,6 +5,9 @@ import remarkGfm from "remark-gfm";
 import demo from "./bulette.md?raw";
 import { convert, reviewReport, type Field, type Issue } from "./converter";
 import { downloadStatBlock, type StatBlockFormat } from "./statblock-export";
+import { LanguageProvider, useLanguage } from "./Language";
+import { armorName, formulaText, spanishReviewReport } from "./i18n";
+import { ArmorGuide, ArmorOptions, armorOptionLabel } from "./ArmorChoices";
 import {
   abilities,
   armor,
@@ -68,6 +71,12 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
     ),
     arrow: <path d="M4 12h16m-6-6 6 6-6 6" />,
     chevron: <path d="m6 9 6 6 6-6" />,
+    globe: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18M12 3a17 17 0 0 1 0 18 17 17 0 0 1 0-18Z" />
+      </>
+    ),
     book: (
       <>
         <path d="M12 5C9 2 4 3 2 4v15c4-1 8-1 10 2 2-3 6-3 10-2V4c-2-1-7-2-10 1Z" />
@@ -99,6 +108,7 @@ function CreatureMarkdown({
   markdown: string;
   className: string;
 }) {
+  const { t } = useLanguage();
   return (
     <div className={className}>
       <ReactMarkdown
@@ -107,7 +117,7 @@ function CreatureMarkdown({
         components={{
           img: ({ alt }) => (
             <span className="omitted-image">
-              {alt ? `[Image: ${alt}]` : "[Image omitted]"}
+              {alt ? t(`[Image: ${alt}]`) : t("[Image omitted]")}
             </span>
           ),
         }}
@@ -179,6 +189,7 @@ function FormulaEditor({
   settings: Settings;
   onSave: (d: Decision) => void;
 }) {
+  const { t } = useLanguage();
   const prior = settings.decisions[field.id];
   const [mode, setMode] = useState<"formula" | "fixed">(
     prior?.mode ?? "formula",
@@ -195,32 +206,34 @@ function FormulaEditor({
   return (
     <div className="formula-editor">
       <label className="field">
-        Treatment
+        {t("Treatment")}
         <select
           value={mode}
           onChange={(e) => setMode(e.target.value as typeof mode)}
         >
-          <option value="formula">Confirm formula</option>
-          <option value="fixed">Preserve as fixed</option>
+          <option value="formula">{t("Confirm formula")}</option>
+          <option value="fixed">{t("Preserve as fixed")}</option>
         </select>
       </label>
       {mode === "formula" && (
         <>
           <div className="two-col">
             <label className="field">
-              Governing ability
+              {t("Governing ability")}
               <select
                 value={ability}
                 onChange={(e) => setAbility(e.target.value as Ability)}
               >
-                <option value="">Choose ability…</option>
+                <option value="">{t("Choose ability…")}</option>
                 {abilities.map((a) => (
-                  <option key={a}>{a}</option>
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
                 ))}
               </select>
             </label>
             <label className="field">
-              PB contribution
+              {t("PB contribution")}
               <select
                 value={multiplier}
                 onChange={(e) =>
@@ -238,8 +251,8 @@ function FormulaEditor({
           <NumberInput
             label={
               field.kind === "passive"
-                ? "Fixed situational adjustment"
-                : "Confirmed fixed bonus"
+                ? t("Fixed situational adjustment")
+                : t("Confirmed fixed bonus")
             }
             value={fixed}
             onChange={setFixed}
@@ -250,19 +263,22 @@ function FormulaEditor({
               : field.kind === "passive"
                 ? "10 + "
                 : ""}
-            {ability || "ability"} modifier + {multiplier} × PB + {fixed ?? "?"}
-            .{" "}
+            {ability || t("ability")}
+            {t(" modifier + ")}
+            {multiplier} × PB + {fixed ?? "?"}.{" "}
             {field.kind === "damage" &&
-              "This replaces only the flat damage term; all dice stay the same."}
+              t(
+                "This replaces only the flat damage term; all dice stay the same.",
+              )}
           </p>
         </>
       )}
       <label className="field">
-        Reason for this decision
+        {t("Reason for this decision")}
         <input
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Explain the confirmed contribution"
+          placeholder={t("Explain the confirmed contribution")}
           maxLength={1000}
         />
       </label>
@@ -283,13 +299,14 @@ function FormulaEditor({
           })
         }
       >
-        Confirm decision
+        {t("Confirm decision")}
       </button>
     </div>
   );
 }
 
 function App() {
+  const { locale, setLocale, t } = useLanguage();
   const [source, setSource] = useState(demo);
   const [settings, setSettings] = useState<Settings>(demoSettings);
   const [isDemo, setIsDemo] = useState(true);
@@ -318,6 +335,8 @@ function App() {
     }
   }, [source, settings]);
   const result = conversion?.result;
+  const selectedArmor = armor.find((item) => item.id === settings.armorId)!;
+  const armorAddsPB = settings.method === "natural" || settings.proficient;
   const changeSettings = (patch: Partial<Settings>) => {
     setSettings((s) => ({ ...s, ...patch }));
     setStatus("");
@@ -379,6 +398,7 @@ function App() {
         exportSheet.current,
         format,
         `${baseName}${result.issues.length ? "_partial" : ""}`,
+        locale,
       );
       setStatus(`Downloaded ${name}`);
     } catch (e) {
@@ -417,7 +437,7 @@ function App() {
     } catch (e) {
       setError(
         project
-          ? `Invalid project: ${(e as Error).message}`
+          ? "Invalid project. Check the version, source and settings."
           : (e as Error).message,
       );
     }
@@ -426,9 +446,9 @@ function App() {
     <article className="review-card" key={issue.id}>
       <div>
         <span className="issue-dot" />
-        <strong>{issue.label}</strong>
+        <strong>{t(issue.label)}</strong>
       </div>
-      <p>{issue.message}</p>
+      <p>{t(issue.message)}</p>
       {issue.acknowledge && (
         <button
           className="small"
@@ -439,8 +459,8 @@ function App() {
           }
         >
           {issue.id.startsWith("average:")
-            ? "Confirm corrected average"
-            : "Confirm independent; preserve text"}
+            ? t("Confirm corrected average")
+            : t("Confirm independent; preserve text")}
         </button>
       )}
       {issue.field && (
@@ -467,13 +487,25 @@ function App() {
           </span>
           <span>
             DnD<span className="brand-light"> Rebalanced</span>
-            <small>THE DM’S WORKBENCH</small>
+            <small>{t("THE DM’S WORKBENCH")}</small>
           </span>
         </a>
         <div className="top-actions">
+          <button
+            className="language-toggle"
+            aria-label={t(
+              locale === "en" ? "Switch to Spanish" : "Switch to English",
+            )}
+            onClick={() => setLocale(locale === "en" ? "es" : "en")}
+          >
+            <Icon name="globe" size={16} />
+            <span lang={locale === "en" ? "es" : "en"}>
+              {locale === "en" ? "Español" : "English"}
+            </span>
+          </button>
           <span className="local-badge">
             <i />
-            All work stays in your browser
+            {t("All work stays in your browser")}
           </span>
           <button
             className="quiet"
@@ -487,73 +519,82 @@ function App() {
               setExpandedField(null);
             }}
           >
-            Reset
+            {t("Reset")}
           </button>
         </div>
       </header>
       <main id="main">
         <section className="intro">
           <div>
-            <p className="eyebrow">D&D 2024 · ARMOR HOUSE RULES</p>
+            <p className="eyebrow">{t("D&D 2024 · ARMOR HOUSE RULES")}</p>
             <h1>
-              A familiar creature.
-              <br className="mobile-break" /> A new challenge.
+              {t("A familiar creature.")}
+              <br className="mobile-break" />
+              {t(" A new challenge.")}
             </h1>
             <p className="intro-copy">
-              Convert a complete stat block. Keep every ruling in sight.
+              {t("Convert a complete stat block. Keep every ruling in sight.")}
             </p>
           </div>
           <details className="conversion-purpose">
             <summary>
-              About this conversion <Icon name="chevron" size={16} />
+              {t("About this conversion ")}
+              <Icon name="chevron" size={16} />
             </summary>
             <div className="purpose-content">
               <p>
-                Adapt enemies to your armor house rules so defense grows with
-                proficiency. The design aims broadly for AC around 15 + PB
-                before shields and enhancements, while attacks commonly sit
-                around +5 + PB. These are targets, not universal caps; a
-                conversion can intentionally make an enemy tougher.
+                {t(
+                  "Adapt enemies to your armor house rules so defense grows with proficiency. The design aims broadly for AC around 15 + PB before shields and enhancements, while attacks commonly sit around +5 + PB. These are targets, not universal caps; a conversion can intentionally make an enemy tougher.",
+                )}
               </p>
               <ul>
                 <li>
-                  Use the unchanged Hit Dice count, rather than CR, to determine
-                  proficiency.
+                  {t(
+                    "Use the unchanged Hit Dice count, rather than CR, to determine proficiency.",
+                  )}
                 </li>
                 <li>
-                  Round the six ability scores upward to even numbers, then
-                  recalculate HP and supported dependent bonuses.
+                  {t(
+                    "Round the six ability scores upward to even numbers, then recalculate HP and supported dependent bonuses.",
+                  )}
                 </li>
                 <li>
-                  Choose a physical defense equivalent and review uncertain
-                  formulas with the DM.
+                  {t(
+                    "Choose a physical defense equivalent and review uncertain formulas with the DM.",
+                  )}
                 </li>
               </ul>
               <p>
-                CR, XP, movement and damage dice stay unchanged. CR is not
-                reassessed, and the average or maximum setting affects HP only.
+                {t(
+                  "CR, XP, movement and damage dice stay unchanged. CR is not reassessed, and the average or maximum setting affects HP only.",
+                )}
+              </p>
+              <p className="language-scope-note">
+                {t(
+                  "The language switch translates the interface; imported Markdown keeps its original text.",
+                )}
               </p>
             </div>
           </details>
           <div className="workflow">
             <span className="active">
-              01 <b>Import</b>
+              01 <b>{t("Import")}</b>
             </span>
             <Icon name="arrow" size={16} />
             <span>
-              02 <b>Refine</b>
+              02 <b>{t("Refine")}</b>
             </span>
             <Icon name="arrow" size={16} />
             <span>
-              03 <b>Bring to the table</b>
+              03 <b>{t("Bring to the table")}</b>
             </span>
           </div>
         </section>
         <div className="notice-area" aria-live="polite">
-          {status && <p className="status">{status}</p>}
+          {status && <p className="status">{t(status)}</p>}
           {(error || conversion?.error) && (
             <p role="alert" className="error">
-              {error || conversion?.error}
+              {t(error || conversion?.error || "")}
             </p>
           )}
         </div>
@@ -565,14 +606,14 @@ function App() {
             <div className="panel-heading">
               <div>
                 <span className="step">01</span>
-                <h2 id="source-title">Original stat block</h2>
+                <h2 id="source-title">{t("Original stat block")}</h2>
               </div>
               <span className="tag">MARKDOWN</span>
             </div>
             <div
               className={`file-drop ${isDragging ? "dragging" : ""}`}
               role="group"
-              aria-label="Markdown file drop zone"
+              aria-label={t("Markdown file drop zone")}
               onDragEnter={(e) => {
                 e.preventDefault();
                 dragDepth.current++;
@@ -604,13 +645,13 @@ function App() {
               <div className="drop-copy">
                 <strong>
                   {isDragging
-                    ? "Release to open your creature"
-                    : "Drop your .md file here"}
+                    ? t("Release to open your creature")
+                    : t("Drop your .md file here")}
                 </strong>
-                <span>Markdown · up to 250 KB · or choose a file</span>
+                <span>{t("Markdown · up to 250 KB · or choose a file")}</span>
               </div>
               <button onClick={() => markdownUpload.current?.click()}>
-                Upload .md
+                {t("Upload .md")}
               </button>
             </div>
             <input
@@ -618,7 +659,7 @@ function App() {
               className="hidden"
               type="file"
               accept=".md,text/markdown"
-              aria-label="Upload Markdown file"
+              aria-label={t("Upload Markdown file")}
               onChange={(e) => {
                 void upload(e.target.files?.[0], false);
                 e.target.value = "";
@@ -627,21 +668,25 @@ function App() {
             {source.trim() && (
               <div className="source-file">
                 <Icon name="book" size={15} />
-                <strong>{sourceFileName}</strong>
-                <span>{source.length.toLocaleString()} characters</span>
+                <strong>{t(sourceFileName)}</strong>
+                <span>
+                  {source.length.toLocaleString()}
+                  {t(" characters")}
+                </span>
                 {isDemo && (
                   <small>
-                    User-supplied demo · not verified official content
+                    {t("User-supplied demo · not verified official content")}
                   </small>
                 )}
               </div>
             )}
             <details className="source-disclosure">
               <summary>
-                Edit or paste Markdown <Icon name="chevron" size={16} />
+                {t("Edit or paste Markdown ")}
+                <Icon name="chevron" size={16} />
               </summary>
               <label className="sr-only" htmlFor="source">
-                Source Markdown
+                {t("Source Markdown")}
               </label>
               <textarea
                 id="source"
@@ -650,13 +695,16 @@ function App() {
                 maxLength={maxFileSize}
                 onChange={(e) => changeSource(e.target.value)}
                 spellCheck={false}
-                placeholder={
-                  "Paste the original Markdown stat block here…\n\nInclude all six ability scores, HP dice, and original PB."
-                }
+                placeholder={t(
+                  "Paste the original Markdown stat block here…\n\nInclude all six ability scores, HP dice, and original PB.",
+                )}
               />
               <div className="source-footer">
-                <span>{source.length.toLocaleString()} characters</span>
-                <span>Original → fresh calculation</span>
+                <span>
+                  {source.length.toLocaleString()}
+                  {t(" characters")}
+                </span>
+                <span>{t("Original → fresh calculation")}</span>
               </div>
             </details>
             <div className="project-actions">
@@ -664,7 +712,7 @@ function App() {
                 className="quiet small"
                 onClick={() => projectUpload.current?.click()}
               >
-                Open project JSON
+                {t("Open project JSON")}
               </button>
               <button
                 className="quiet small"
@@ -683,7 +731,7 @@ function App() {
                   }
                 }}
               >
-                Save project JSON
+                {t("Save project JSON")}
               </button>
             </div>
             <input
@@ -691,7 +739,7 @@ function App() {
               className="hidden"
               type="file"
               accept=".json,application/json"
-              aria-label="Open project JSON file"
+              aria-label={t("Open project JSON file")}
               onChange={(e) => {
                 void upload(e.target.files?.[0], true);
                 e.target.value = "";
@@ -706,19 +754,22 @@ function App() {
               <summary className="panel-heading">
                 <div>
                   <span className="step">02</span>
-                  <h2 id="controls-title">Conversion rules</h2>
+                  <h2 id="controls-title">{t("Conversion rules")}</h2>
                 </div>
                 <span className="rules-summary">
                   <span>
-                    {methods[settings.method]}
+                    {t(methods[settings.method])}
                     {["natural", "worn"].includes(settings.method)
-                      ? ` · ${armor.find((a) => a.id === settings.armorId)?.name}`
+                      ? ` · ${armorName(armor.find((a) => a.id === settings.armorId)!, locale)}`
                       : settings.method === "mage_armor"
-                        ? ` · slot ${settings.slot ?? "?"}`
+                        ? t(` · slot ${settings.slot ?? "?"}`)
                         : ""}
                     <small>
-                      {settings.hpMode === "average" ? "Average" : "Maximum"} HP
-                      · click to adjust
+                      {t(
+                        settings.hpMode === "average"
+                          ? "Average HP · click to adjust"
+                          : "Maximum HP · click to adjust",
+                      )}
                     </small>
                   </span>
                   <Icon name="chevron" />
@@ -726,9 +777,9 @@ function App() {
               </summary>
               <div className="controls-body">
                 <fieldset disabled={!!result?.marked}>
-                  <legend className="eyebrow">PHYSICAL DEFENSE</legend>
+                  <legend className="eyebrow">{t("PHYSICAL DEFENSE")}</legend>
                   <label className="field">
-                    Defense method
+                    {t("Defense method")}
                     <select
                       value={settings.method}
                       onChange={(e) =>
@@ -737,35 +788,42 @@ function App() {
                     >
                       {Object.entries(methods).map(([id, name]) => (
                         <option key={id} value={id}>
-                          {name}
+                          {t(name)}
                         </option>
                       ))}
                     </select>
                   </label>
                   {["natural", "worn"].includes(settings.method) && (
                     <>
+                      <ArmorGuide
+                        addPB={
+                          settings.method === "natural" || settings.proficient
+                        }
+                      />
                       <div className="two-col">
                         <label className="field">
                           {settings.method === "natural"
-                            ? "Physical equivalent"
-                            : "Armor"}
+                            ? t("Physical equivalent")
+                            : t("Armor")}
                           <select
                             value={settings.armorId}
+                            aria-describedby="armor-choice-note"
                             onChange={(e) =>
                               changeSettings({
                                 armorId: e.target.value as Settings["armorId"],
                               })
                             }
                           >
-                            {armor.map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.name}
-                              </option>
-                            ))}
+                            <ArmorOptions
+                              addPB={
+                                settings.method === "natural" ||
+                                settings.proficient
+                              }
+                            />
                           </select>
                         </label>
                         <label className="field">
-                          Enhancement
+                          {t("Enhancement")}
                           <select
                             value={settings.enhancement}
                             onChange={(e) =>
@@ -776,15 +834,21 @@ function App() {
                           >
                             {[0, 1, 2, 3].map((n) => (
                               <option key={n} value={n}>
-                                {n === 0 ? "None" : `+${n}`}
+                                {n === 0 ? t("None") : `+${n}`}
                               </option>
                             ))}
                           </select>
                         </label>
                       </div>
+                      <p
+                        id="armor-choice-note"
+                        className="selected-armor-formula"
+                      >
+                        {armorOptionLabel(selectedArmor, locale, armorAddsPB)}
+                      </p>
                       {settings.method === "worn" && (
                         <Check
-                          label="Proficient in this worn armor"
+                          label={t("Proficient in this worn armor")}
                           checked={settings.proficient}
                           onChange={(proficient) =>
                             changeSettings({ proficient })
@@ -793,28 +857,37 @@ function App() {
                       )}
                       {settings.method === "natural" && (
                         <div className="guidance">
-                          <strong>Choose by physical protection</strong>
+                          <strong>{t("Choose by physical protection")}</strong>
                           <p>
-                            Skin, fur, flexible hide → light.
+                            {t("Skin, fur, flexible hide → light.")}
                             <br />
-                            Chitin, layered plates, rigid scales → medium.
+                            {t(
+                              "Chitin, layered plates, rigid scales → medium.",
+                            )}
                             <br />
-                            Steel-like shells and carapaces → heavy.
+                            {t("Steel-like shells and carapaces → heavy.")}
                           </p>
                           <small>
-                            Suggestions for a DM ruling. No automatic magical
-                            enhancement or equipment properties.
+                            {t(
+                              "Suggestions for a DM ruling. No automatic magical enhancement or equipment properties.",
+                            )}
                           </small>
                         </div>
                       )}
                       <label className="field">
-                        Reason for the equivalent
+                        {t("Reason for the equivalent")}
                         <input
-                          value={settings.rationale}
+                          value={
+                            settings.rationale === demoSettings().rationale
+                              ? t(settings.rationale)
+                              : settings.rationale
+                          }
                           onChange={(e) =>
                             changeSettings({ rationale: e.target.value })
                           }
-                          placeholder="e.g. Thick, overlapping shell plates"
+                          placeholder={t(
+                            "e.g. Thick, overlapping shell plates",
+                          )}
                           maxLength={2000}
                         />
                       </label>
@@ -823,39 +896,40 @@ function App() {
                   {settings.method === "mage_armor" && (
                     <>
                       <NumberInput
-                        label="Mage Armor spell-slot level"
+                        label={t("Mage Armor spell-slot level")}
                         min={1}
                         max={9}
                         value={settings.slot}
                         onChange={(slot) => changeSettings({ slot })}
                       />
                       <p className="help">
-                        Slots 1–2: 13 + DEX (cap 3) + PB.
+                        {t("Slots 1–2: 13 + DEX (cap 3) + PB.")}
                         <br />
-                        Slots 3–4: 15 + DEX (cap 1) + PB.
+                        {t("Slots 3–4: 15 + DEX (cap 1) + PB.")}
                         <br />
-                        Slots 5–9: 17 + PB, DEX ignored.
+                        {t("Slots 5–9: 17 + PB, DEX ignored.")}
                         <br />
-                        Uses the target’s PB. Normal spell eligibility still
-                        applies.
+                        {t(
+                          "Uses the target’s PB. Normal spell eligibility still applies.",
+                        )}
                       </p>
                     </>
                   )}
                   {settings.method === "review" && (
                     <>
                       <p className="help">
-                        No automatic formula is defined for special
-                        base-replacing effects. Enter an override and explain
-                        the ruling, or leave AC unresolved.
+                        {t(
+                          "No automatic formula is defined for special base-replacing effects. Enter an override and explain the ruling, or leave AC unresolved.",
+                        )}
                       </p>
                       <NumberInput
-                        label="Manual AC override"
+                        label={t("Manual AC override")}
                         min={1}
                         value={settings.manualAC}
                         onChange={(manualAC) => changeSettings({ manualAC })}
                       />
                       <label className="field">
-                        Override reason
+                        {t("Override reason")}
                         <input
                           value={settings.manualACReason}
                           onChange={(e) =>
@@ -870,18 +944,20 @@ function App() {
                   ) && (
                     <p className="help">
                       {settings.method === "ordinary"
-                        ? "10 + min(DEX modifier, 5) + PB."
-                        : `min(10 + DEX modifier + ${settings.method === "monk" ? "WIS" : "CON"} modifier, 15) + PB.`}
+                        ? t("10 + min(DEX modifier, 5) + PB.")
+                        : t(
+                            `min(10 + DEX modifier + ${settings.method === "monk" ? "WIS" : "CON"} modifier, 15) + PB.`,
+                          )}
                       {settings.method === "monk"
-                        ? " Armor and shields are unavailable."
+                        ? t(" Armor and shields are unavailable.")
                         : settings.method === "barbarian"
-                          ? " Armor is unavailable; a shield is allowed."
-                          : " Negative DEX still applies."}
+                          ? t(" Armor is unavailable; a shield is allowed.")
+                          : t(" Negative DEX still applies.")}
                     </p>
                   )}
                   <div className="shield-row">
                     <Check
-                      label="Equip shield"
+                      label={t("Equip shield")}
                       checked={settings.shield}
                       onChange={(shield) =>
                         changeSettings({ shield, shieldEnhancement: 0 })
@@ -889,7 +965,7 @@ function App() {
                     />
                     {settings.shield && (
                       <label className="field compact">
-                        Shield enhancement
+                        {t("Shield enhancement")}
                         <select
                           value={settings.shieldEnhancement}
                           onChange={(e) =>
@@ -901,8 +977,8 @@ function App() {
                           {[0, 1, 2, 3].map((n) => (
                             <option key={n} value={n}>
                               {n
-                                ? `+${n} (${n + 1} AC total)`
-                                : "Normal (+1 AC)"}
+                                ? t(`+${n} (${n + 1} AC total)`)
+                                : t("Normal (+1 AC)")}
                             </option>
                           ))}
                         </select>
@@ -911,14 +987,15 @@ function App() {
                   </div>
                   <details>
                     <summary>
-                      Other confirmed AC effects
+                      {t("Other confirmed AC effects")}
                       {settings.effects.length
                         ? ` (${settings.effects.length})`
                         : ""}
                     </summary>
                     <p className="help">
-                      Additive effects only; each needs a name. These do not
-                      replace the base defense.
+                      {t(
+                        "Additive effects only; each needs a name. These do not replace the base defense.",
+                      )}
                     </p>
                     {settings.effects.map((effect, i) => (
                       <div className="effect" key={i}>
@@ -927,7 +1004,7 @@ function App() {
                         </span>
                         <button
                           className="quiet small"
-                          aria-label={`Remove ${effect.name}`}
+                          aria-label={t(`Remove ${effect.name}`)}
                           onClick={() =>
                             changeSettings({
                               effects: settings.effects.filter(
@@ -936,12 +1013,12 @@ function App() {
                             })
                           }
                         >
-                          Remove
+                          {t("Remove")}
                         </button>
                       </div>
                     ))}
                     <label className="field">
-                      Effect name
+                      {t("Effect name")}
                       <input
                         value={effectName}
                         onChange={(e) => setEffectName(e.target.value)}
@@ -949,7 +1026,7 @@ function App() {
                       />
                     </label>
                     <NumberInput
-                      label="Signed AC bonus"
+                      label={t("Signed AC bonus")}
                       value={effectValue}
                       onChange={setEffectValue}
                     />
@@ -971,16 +1048,16 @@ function App() {
                         setEffectValue(null);
                       }}
                     >
-                      Add effect
+                      {t("Add effect")}
                     </button>
                   </details>
                 </fieldset>
                 <fieldset disabled={!!result?.marked}>
-                  <legend className="eyebrow">HIT POINTS</legend>
+                  <legend className="eyebrow">{t("HIT POINTS")}</legend>
                   <div
                     className="segmented"
                     role="group"
-                    aria-label="Hit Points mode"
+                    aria-label={t("Hit Points mode")}
                   >
                     <button
                       aria-pressed={settings.hpMode === "average"}
@@ -989,7 +1066,8 @@ function App() {
                       }
                       onClick={() => changeSettings({ hpMode: "average" })}
                     >
-                      Average <span>default</span>
+                      {t("Average ")}
+                      <span>{t("default")}</span>
                     </button>
                     <button
                       aria-pressed={settings.hpMode === "maximum"}
@@ -998,18 +1076,20 @@ function App() {
                       }
                       onClick={() => changeSettings({ hpMode: "maximum" })}
                     >
-                      Maximum
+                      {t("Maximum")}
                     </button>
                   </div>
                   <p className="help">
-                    Same Hit Dice. New CON contribution.{" "}
+                    {t("Same Hit Dice. New CON contribution.")}{" "}
                     {settings.hpMode === "average"
-                      ? "Exact dice averages, rounded down once."
-                      : "Maximum HP changes HP only; damage stays averaged."}
+                      ? t("Exact dice averages, rounded down once.")
+                      : t("Maximum HP changes HP only; damage stays averaged.")}
                   </p>
                   {result?.hpExtra !== undefined && result.hpExtra !== 0 && (
                     <Check
-                      label={`Confirm fixed extra HP ${signed(result.hpExtra)}`}
+                      label={t(
+                        `Confirm fixed extra HP ${signed(result.hpExtra)}`,
+                      )}
                       checked={settings.confirmHPExtra}
                       onChange={(confirmHPExtra) =>
                         changeSettings({ confirmHPExtra })
@@ -1025,17 +1105,19 @@ function App() {
                     )
                   }
                 >
-                  <summary>Original formulas & proficiency</summary>
+                  <summary>{t("Original formulas & proficiency")}</summary>
                   <NumberInput
-                    label="Resolve original PB"
+                    label={t("Resolve original PB")}
                     value={settings.originalPB}
                     min={1}
                     onChange={(originalPB) => changeSettings({ originalPB })}
-                    hint="Leave blank to use consistent source PB entries."
+                    hint={t("Leave blank to use consistent source PB entries.")}
                   />
                   {result?.parsed.cr !== undefined && (
                     <Check
-                      label={`Confirm original CR ${result.parsed.cr} fallback for missing PB`}
+                      label={t(
+                        `Confirm original CR ${result.parsed.cr} fallback for missing PB`,
+                      )}
                       checked={settings.confirmCRFallback}
                       onChange={(confirmCRFallback) =>
                         changeSettings({ confirmCRFallback })
@@ -1043,27 +1125,29 @@ function App() {
                     />
                   )}
                   <Check
-                    label="Use score-derived modifiers to resolve listed modifier conflicts"
+                    label={t(
+                      "Use score-derived modifiers to resolve listed modifier conflicts",
+                    )}
                     checked={settings.acceptScoreModifiers}
                     onChange={(acceptScoreModifiers) =>
                       changeSettings({ acceptScoreModifiers })
                     }
                   />
                   <Check
-                    label="Continue the proficiency pattern beyond 30 HD"
+                    label={t("Continue the proficiency pattern beyond 30 HD")}
                     checked={settings.extendPB}
                     onChange={(extendPB) => changeSettings({ extendPB })}
                   />
                   <p className="help">
-                    Enemy effective level is the unchanged number of Hit Dice.
-                    CR and XP stay unchanged and are not a new difficulty
-                    assessment.
+                    {t(
+                      "Enemy effective level is the unchanged number of Hit Dice. CR and XP stay unchanged and are not a new difficulty assessment.",
+                    )}
                   </p>
                 </details>
                 <details>
-                  <summary>DM notes</summary>
+                  <summary>{t("DM notes")}</summary>
                   <label className="field">
-                    Notes saved in project & export metadata
+                    {t("Notes saved in project & export metadata")}
                     <textarea
                       rows={3}
                       value={settings.notes}
@@ -1075,36 +1159,39 @@ function App() {
                   </label>
                 </details>
                 <details className="references">
-                  <summary>Armor & proficiency reference</summary>
+                  <summary>{t("Armor & proficiency reference")}</summary>
                   <table>
-                    <caption>Custom armor values</caption>
+                    <caption>{t("Custom armor values")}</caption>
                     <thead>
                       <tr>
-                        <th>Equivalent</th>
-                        <th>Base</th>
-                        <th>DEX</th>
+                        <th>{t("Equivalent")}</th>
+                        <th>{t("Base")}</th>
+                        <th>{t("DEX")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {armor.map((a) => (
                         <tr key={a.id}>
-                          <td>{a.name}</td>
+                          <td>{armorName(a, locale)}</td>
                           <td>{a.base}</td>
                           <td>
-                            {a.dexCap === null ? "Ignored" : `Cap +${a.dexCap}`}
+                            {a.dexCap === null
+                              ? t("Ignored")
+                              : t(`Cap +${a.dexCap}`)}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   <p className="help">
-                    Applicable PB is added to the base. Heavy armor ignores all
-                    DEX, including negative values. Hide and Ring Mail have no
-                    defined values.
+                    {t(
+                      "Applicable PB is added to the base. Heavy armor ignores all DEX, including negative values. Hide and Ring Mail have no defined values.",
+                    )}
                   </p>
                   <p className="help">
-                    1–4 HD +2 · 5–8 +3 · 9–12 +4 · 13–16 +5 · 17–20 +6 · 21–24
-                    +7 · 25–28 +8 · 29–30 +9.
+                    {t(
+                      "1–4 HD +2 · 5–8 +3 · 9–12 +4 · 13–16 +5 · 17–20 +6 · 21–24 +7 · 25–28 +8 · 29–30 +9.",
+                    )}
                   </p>
                 </details>
               </div>
@@ -1117,27 +1204,28 @@ function App() {
             <div className="panel-heading">
               <div>
                 <span className="step">03</span>
-                <h2 id="result-title">The converted creature</h2>
+                <h2 id="result-title">{t("The converted creature")}</h2>
               </div>
               {result && (
                 <span
                   className={`tag ${result.issues.length ? "amber" : "green"}`}
                 >
                   {result.marked
-                    ? "READ ONLY"
+                    ? t("READ ONLY")
                     : result.issues.length
-                      ? `${result.issues.length} TO REVIEW`
-                      : "READY FOR THE TABLE"}
+                      ? t(`${result.issues.length} TO REVIEW`)
+                      : t("READY FOR THE TABLE")}
                 </span>
               )}
             </div>
             {!result ? (
               <div className="empty-state">
                 <Icon name="book" size={42} />
-                <h3>Your next encounter starts here.</h3>
+                <h3>{t("Your next encounter starts here.")}</h3>
                 <p>
-                  Paste or upload an original Markdown creature to see its full
-                  conversion.
+                  {t(
+                    "Paste or upload an original Markdown creature to see its full conversion.",
+                  )}
                 </p>
               </div>
             ) : (
@@ -1145,50 +1233,50 @@ function App() {
                 <div className="result-summary">
                   <div>
                     <p className="eyebrow">
-                      {isDemo ? "DEMO CREATURE" : "CONVERSION PREVIEW"}
+                      {isDemo ? t("DEMO CREATURE") : t("CONVERSION PREVIEW")}
                     </p>
                     <h2>{result.parsed.name}</h2>
                   </div>
                   <span className="hd-badge">
                     {result.parsed.hp
-                      ? `${result.parsed.hp.count} HD`
-                      : "HD needed"}
+                      ? t(`${result.parsed.hp.count} HD`)
+                      : t("HD needed")}
                   </span>
                 </div>
                 <div className="metrics">
                   <div>
-                    <small>ARMOR CLASS</small>
+                    <small>{t("ARMOR CLASS")}</small>
                     <strong>{result.ac ?? "—"}</strong>
                     <span>
                       {result.parsed.ac
-                        ? `was ${result.parsed.ac.value}`
-                        : "choose defense"}
+                        ? t(`was ${result.parsed.ac.value}`)
+                        : t("choose defense")}
                     </span>
                   </div>
                   <div>
-                    <small>{settings.hpMode.toUpperCase()} HP</small>
+                    <small>{t(`${settings.hpMode.toUpperCase()} HP`)}</small>
                     <strong>{result.hp ?? "—"}</strong>
                     <span>
                       {result.parsed.hp
-                        ? `was ${result.parsed.hp.total}`
-                        : "needs formula"}
+                        ? t(`was ${result.parsed.hp.total}`)
+                        : t("needs formula")}
                     </span>
                   </div>
                   <div>
-                    <small>PROFICIENCY</small>
+                    <small>{t("PROFICIENCY")}</small>
                     <strong>
                       {result.pb === undefined ? "—" : signed(result.pb)}
                     </strong>
                     <span>
                       {result.oldPB === undefined
-                        ? "original PB needed"
-                        : `was ${signed(result.oldPB)}`}
+                        ? t("original PB needed")
+                        : t(`was ${signed(result.oldPB)}`)}
                     </span>
                   </div>
                 </div>
                 <div
                   className="score-strip"
-                  aria-label="Rounded ability scores"
+                  aria-label={t("Rounded ability scores")}
                 >
                   {result.scores.map((a) => (
                     <div key={a.ability}>
@@ -1203,30 +1291,41 @@ function App() {
                 </div>
                 {settings.method === "mage_armor" && (
                   <p className="result-note">
-                    Mage Armor · spell slot {settings.slot ?? "required"} ·
-                    target PB
+                    {t("Mage Armor · spell slot ")}
+                    {settings.slot ?? t("required")}
+                    {t(" · target PB")}
                   </p>
                 )}
                 {settings.rationale &&
                   ["natural", "worn"].includes(settings.method) && (
-                    <p className="result-note">{settings.rationale}</p>
+                    <p className="result-note">
+                      {settings.rationale === demoSettings().rationale
+                        ? t(settings.rationale)
+                        : settings.rationale}
+                    </p>
                   )}
                 {settings.extendPB && (
                   <p className="result-note">
-                    DM ruling: proficiency pattern continues beyond 30 HD.
+                    {t(
+                      "DM ruling: proficiency pattern continues beyond 30 HD.",
+                    )}
                   </p>
                 )}
-                <div className="tabs" role="tablist" aria-label="Result views">
-                  {(["preview", "changes", "markdown"] as const).map((t) => (
+                <div
+                  className="tabs"
+                  role="tablist"
+                  aria-label={t("Result views")}
+                >
+                  {(["preview", "changes", "markdown"] as const).map((view) => (
                     <button
                       role="tab"
-                      id={`tab-${t}`}
-                      aria-controls={`view-${t}`}
-                      aria-selected={tab === t}
-                      tabIndex={tab === t ? 0 : -1}
-                      key={t}
-                      className={tab === t ? "active" : ""}
-                      onClick={() => setTab(t)}
+                      id={`tab-${view}`}
+                      aria-controls={`view-${view}`}
+                      aria-selected={tab === view}
+                      tabIndex={tab === view ? 0 : -1}
+                      key={view}
+                      className={tab === view ? "active" : ""}
+                      onClick={() => setTab(view)}
                       onKeyDown={(e) => {
                         const options = [
                           "preview",
@@ -1235,9 +1334,9 @@ function App() {
                         ] as const;
                         let next = -1;
                         if (e.key === "ArrowRight")
-                          next = (options.indexOf(t) + 1) % 3;
+                          next = (options.indexOf(view) + 1) % 3;
                         if (e.key === "ArrowLeft")
-                          next = (options.indexOf(t) + 2) % 3;
+                          next = (options.indexOf(view) + 2) % 3;
                         if (e.key === "Home") next = 0;
                         if (e.key === "End") next = 2;
                         if (next >= 0) {
@@ -1249,10 +1348,12 @@ function App() {
                         }
                       }}
                     >
-                      {t === "preview"
-                        ? "Stat block"
-                        : t === "changes"
-                          ? `Changes (${result.changes.filter((c) => c.before !== c.after).length})`
+                      {view === "preview"
+                        ? t("Stat block")
+                        : view === "changes"
+                          ? t(
+                              `Changes (${result.changes.filter((c) => c.before !== c.after).length})`,
+                            )
                           : "Markdown"}
                     </button>
                   ))}
@@ -1273,7 +1374,7 @@ function App() {
                   {tab === "markdown" && (
                     <>
                       <label className="sr-only" htmlFor="output">
-                        Converted Markdown
+                        {t("Converted Markdown")}
                       </label>
                       <textarea
                         id="output"
@@ -1289,7 +1390,7 @@ function App() {
                       {result.changes.map((c) => (
                         <article key={c.id} className="change">
                           <div>
-                            <strong>{c.label}</strong>
+                            <strong>{t(c.label)}</strong>
                             <span
                               className={
                                 c.before !== c.after ? "value changed" : "value"
@@ -1298,8 +1399,8 @@ function App() {
                               {c.before} <span>→</span> {c.after}
                             </span>
                           </div>
-                          <p>{c.formula}</p>
-                          <small>{c.confidence}</small>
+                          <p>{formulaText(c.formula, locale)}</p>
+                          <small>{t(c.confidence)}</small>
                           {result.parsed.fields.some((f) => f.id === c.id) && (
                             <>
                               <button
@@ -1311,8 +1412,8 @@ function App() {
                                 }
                               >
                                 {expandedField === c.id
-                                  ? "Close decision"
-                                  : "Review / override formula"}
+                                  ? t("Close decision")
+                                  : t("Review / override formula")}
                               </button>
                               {expandedField === c.id && (
                                 <FormulaEditor
@@ -1345,15 +1446,15 @@ function App() {
                     <div className="review-title">
                       <strong>
                         {result.marked
-                          ? "Already converted"
-                          : "A few rulings need you"}
+                          ? t("Already converted")
+                          : t("A few rulings need you")}
                       </strong>
                       <span>{result.issues.length}</span>
                     </div>
                     <p className="help">
-                      Unresolved fields stay as written. Exports are labeled as
-                      partial. This report is kept outside the creature
-                      mechanics.
+                      {t(
+                        "Unresolved fields stay as written. Exports are labeled as partial. This report is kept outside the creature mechanics.",
+                      )}
                     </p>
                     {result.issues.map(renderIssue)}
                   </div>
@@ -1362,11 +1463,13 @@ function App() {
                   <div
                     className="visual-downloads"
                     role="group"
-                    aria-label="Download visual stat block"
+                    aria-label={t("Download visual stat block")}
                   >
                     <div className="export-caption">
-                      <strong>Take it to the table</strong>
-                      <span>Download the complete, styled stat block.</span>
+                      <strong>{t("Take it to the table")}</strong>
+                      <span>
+                        {t("Download the complete, styled stat block.")}
+                      </span>
                     </div>
                     <button
                       className="primary"
@@ -1374,20 +1477,24 @@ function App() {
                       onClick={() => void exportVisual("png")}
                     >
                       <Icon name="download" />
-                      {exporting === "png" ? "Preparing PNG…" : "Download PNG"}
+                      {exporting === "png"
+                        ? t("Preparing PNG…")
+                        : t("Download PNG")}
                     </button>
                     <button
                       disabled={!exportReady || !!exporting}
                       onClick={() => void exportVisual("pdf")}
                     >
                       <Icon name="download" />
-                      {exporting === "pdf" ? "Preparing PDF…" : "Download PDF"}
+                      {exporting === "pdf"
+                        ? t("Preparing PDF…")
+                        : t("Download PDF")}
                     </button>
                   </div>
                   <div className="markdown-downloads">
                     <button disabled={!exportReady} onClick={() => void copy()}>
                       <Icon name="copy" />
-                      Copy Markdown
+                      {t("Copy Markdown")}
                     </button>
                     <button
                       disabled={!exportReady}
@@ -1397,17 +1504,22 @@ function App() {
                       }
                     >
                       <Icon name="download" />
-                      Download .md
+                      {t("Download .md")}
                     </button>
                     <button
                       className="quiet small"
                       disabled={!exportReady}
                       onClick={() =>
                         result &&
-                        download(reviewReport(result), `${baseName}_review.md`)
+                        download(
+                          locale === "es"
+                            ? spanishReviewReport(result)
+                            : reviewReport(result),
+                          `${baseName}_review.md`,
+                        )
                       }
                     >
-                      Review report
+                      {t("Review report")}
                     </button>
                   </div>
                 </div>
@@ -1420,12 +1532,13 @@ function App() {
             <div className="export-sheet" ref={exportSheet}>
               <div className="export-masthead">
                 <span>DnD Rebalanced</span>
-                <span>D&D 2024 · HOUSE RULES</span>
+                <span>{t("D&D 2024 · HOUSE RULES")}</span>
               </div>
               {!!result.issues.length && (
                 <div className="export-partial">
-                  Partial conversion · {result.issues.length} unresolved fields.
-                  See the separate review report.
+                  {t("Partial conversion · ")}
+                  {result.issues.length}
+                  {t(" unresolved fields. See the separate review report.")}
                 </div>
               )}
               <CreatureMarkdown
@@ -1433,22 +1546,25 @@ function App() {
                 className="export-statblock"
               />
               <div className="export-footnote">
-                Converted stat block ·{" "}
-                {settings.hpMode === "maximum" ? "Maximum" : "Average"} HP
+                {t(
+                  settings.hpMode === "maximum"
+                    ? "Converted stat block · Maximum HP"
+                    : "Converted stat block · Average HP",
+                )}
                 {settings.method === "mage_armor"
-                  ? ` · Mage Armor slot ${settings.slot}`
+                  ? t(` · Mage Armor slot ${settings.slot}`)
                   : ""}
-                {settings.extendPB ? " · Extended proficiency pattern" : ""}
+                {settings.extendPB ? t(" · Extended proficiency pattern") : ""}
               </div>
             </div>
           </div>
         )}
         <footer>
           <span>
-            <Icon name="shield" size={14} /> Built for rulings, with the math
-            attached.
+            <Icon name="shield" size={14} />
+            {t(" Built for rulings, with the math attached.")}
           </span>
-          <span>Local conversion. Your files stay in your browser.</span>
+          <span>{t("Local conversion. Your files stay in your browser.")}</span>
         </footer>
       </main>
     </>
@@ -1456,6 +1572,8 @@ function App() {
 }
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <LanguageProvider>
+      <App />
+    </LanguageProvider>
   </React.StrictMode>,
 );

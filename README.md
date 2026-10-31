@@ -62,6 +62,10 @@ Browser tests use `/usr/bin/chromium`. Set `CHROMIUM_PATH` to another Chromium e
 
 ## Use
 
+Use the **Español / English** button in the header to change the interface language. The preference is remembered in this browser. Controls, guidance, validation, formula review and export annotations are translated; the imported Markdown, user notes and calculated mechanics retain their original values and text. Changing language does not reapply the conversion or change its settings.
+
+The armor selector separates light, medium and heavy armor. Every option shows its custom AC base, DEX cap and applicable PB contribution before selection. A nearby guide explains category ranges, negative DEX, proficiency and additive effects.
+
 1. Drag a `.md` file onto the compact drop zone or choose **Upload .md**. To paste or edit the source, expand **Edit or paste Markdown**. The initial Bulette is the **user-supplied regression fixture**, not verified official content.
 2. Expand **Conversion rules** to choose a defense method and, for natural or worn armor, a physical equivalent. The closed section summarizes the current defense and HP mode. Old AC is an optional comparison, never an input to the defense formula. If missing, a calculated AC line is inserted beside HP.
 3. Review the six rounded scores, unchanged HD count, new PB, AC and HP. Average HP is the default. Maximum HP changes HP only.
@@ -94,5 +98,7 @@ Converted Markdown has an inert conversion marker and encoded metadata. Reopenin
 - `src/converter.ts`: immutable source parser, explicit/inferred formulas, source-span edits and review exports.
 - `src/main.tsx` and `src/style.css`: responsive workspace, safe preview and local file/clipboard actions.
 - `src/statblock-export.ts`: local PNG rendering and paginated PDF export; its rendering libraries load only when requested.
+- `src/Language.tsx`, `src/i18n.ts` and `src/messages*.json`: local English/Spanish interface translation and remembered language preference.
+- `src/ArmorChoices.tsx`: grouped armor options and explanations using the existing custom armor data.
 - `src/bulette.md`: exact supplied fixture.
 - `src/*.test.ts` and `tests/workspace.spec.ts`: rule/conversion regressions and real Chromium workflows.

@@ -161,6 +161,54 @@ button.small {
 .top-actions button:hover {
   background: #a4845140;
 }
+.top-actions .language-toggle {
+  border-color: #9c7949;
+  background: #70503122;
+  color: #f3d9a8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.armor-guide {
+  border: 1px solid #cfb98d;
+  border-radius: 3px;
+  background: #f0e2c477;
+  padding: 13px 16px;
+  margin-bottom: 18px;
+  color: #755536;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.armor-guide dl {
+  margin: 0;
+}
+.armor-guide dl > div {
+  padding: 8px 0;
+}
+.armor-guide dl > div + div {
+  border-top: 1px solid #dac6a0;
+}
+.armor-guide dt {
+  font-weight: 700;
+  color: #71472a;
+}
+.armor-guide dd {
+  margin: 2px 0 0;
+}
+.armor-guide p {
+  margin: 9px 0 0;
+}
+.armor-guide .no-armor-pb {
+  font-weight: 700;
+  color: #7e3929;
+}
+.selected-armor-formula {
+  color: #75502d;
+  font:
+    12px/1.8 ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+  margin: -3px 0 17px;
+}
 .local-badge {
   display: flex;
   align-items: center;
@@ -1181,6 +1229,12 @@ footer > span:first-child {
     padding: 8px;
     font-size: 10px;
   }
+  .top-actions .language-toggle svg {
+    display: none;
+  }
+  .panel-heading > div {
+    min-width: 0;
+  }
   main {
     padding: 25px 14px 20px;
   }
@@ -1403,6 +1457,18 @@ footer > span:first-child {
     font-size: 9px;
     line-height: 1.8;
     gap: 8px;
+  }
+}
+@media (max-width: 420px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .brand {
+    font-size: 20px;
+  }
+  .top-actions {
+    margin-left: auto;
   }
 }
 @media (prefers-reduced-motion: reduce) {

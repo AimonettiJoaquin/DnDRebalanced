@@ -339,3 +339,154 @@ test("partial visual exports are labeled, and long stat blocks create multiple P
   expect(count).toBeGreaterThanOrEqual(3);
   await pdf.saveAs("test-results/exported-long-creature.pdf");
 });
+
+test("language toggle preserves source, settings and results, and remembers the chosen language", async ({
+  page,
+}) => {
+  await page
+    .getByRole("combobox", { name: "Defense method", exact: true })
+    .selectOption("mage_armor");
+  await page.getByLabel("Mage Armor spell-slot level").fill("5");
+  await page.getByRole("button", { name: "Maximum", exact: true }).click();
+  await page.getByRole("tab", { name: "Markdown", exact: true }).click();
+  const converted = await page
+    .getByLabel("Converted Markdown", { exact: true })
+    .inputValue();
+  const original = await page
+    .getByLabel("Source Markdown", { exact: true })
+    .inputValue();
+  await page.getByRole("button", { name: "Switch to Spanish" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "es");
+  await expect(
+    page.getByRole("heading", { name: "Reglas de conversión", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Markdown original", { exact: true }),
+  ).toHaveValue(original);
+  await expect(
+    page.getByLabel("Markdown convertido", { exact: true }),
+  ).toHaveValue(converted);
+  await expect(
+    page.getByRole("combobox", { name: "Método de defensa", exact: true }),
+  ).toHaveValue("mage_armor");
+  await expect(
+    page.getByLabel("Nivel del espacio de conjuro de Armadura de mago"),
+  ).toHaveValue("5");
+  await expect(page.locator(".metrics")).toContainText("PV MÁXIMOS");
+  await expect(page.locator(".metrics")).toContainText("144");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("lang", "es");
+  await expect(
+    page.getByRole("heading", { name: "Reglas de conversión", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cambiar a inglés" }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(
+    page.getByRole("heading", { name: "Conversion rules", exact: true }),
+  ).toBeVisible();
+});
+
+test("armor categories and formulas are visible before selection and respect proficiency", async ({
+  page,
+}) => {
+  const select = page.getByRole("combobox", {
+    name: "Physical equivalent",
+    exact: true,
+  });
+  expect(
+    await select
+      .locator("optgroup")
+      .evaluateAll((groups) =>
+        groups.map((group) => group.getAttribute("label")),
+      ),
+  ).toEqual(["Light armor", "Medium armor", "Heavy armor"]);
+  await expect(select.locator('option[value="leather"]')).toHaveText(
+    "Leather · AC 11 + DEX (≤ +4) + PB",
+  );
+  await expect(select.locator('option[value="scale_mail"]')).toHaveText(
+    "Scale Mail · AC 13 + DEX (≤ +1) + PB",
+  );
+  await expect(select.locator('option[value="plate"]')).toHaveText(
+    "Plate · AC 16 + PB · DEX ignored",
+  );
+  await expect(page.locator(".armor-guide")).toContainText("even negative DEX");
+  await page
+    .getByRole("combobox", { name: "Defense method", exact: true })
+    .selectOption("worn");
+  await page.getByLabel("Proficient in this worn armor").uncheck();
+  await expect(
+    page.locator('.controls-body option[value="plate"]'),
+  ).not.toContainText("+ PB");
+  await expect(page.locator(".no-armor-pb")).toBeVisible();
+  await expect(page.locator(".metrics")).toContainText("16");
+  await page.getByRole("button", { name: "Switch to Spanish" }).click();
+  const spanish = page.getByRole("combobox", { name: "Armadura", exact: true });
+  expect(
+    await spanish
+      .locator("optgroup")
+      .evaluateAll((groups) =>
+        groups.map((group) => group.getAttribute("label")),
+      ),
+  ).toEqual(["Armadura ligera", "Armadura media", "Armadura pesada"]);
+  await expect(spanish.locator('option[value="plate"]')).toHaveText(
+    "Placas · CA 16 · Se ignora DEX",
+  );
+  await expect(page.locator(".armor-guide")).toContainText(
+    "La DEX negativa reduce la CA",
+  );
+});
+
+test("Spanish review decisions, validation and visual export stay local and usable on mobile", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Switch to Spanish" }).click();
+  await page
+    .getByLabel("Cargar archivo Markdown")
+    .setInputFiles({
+      name: "wrong.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("x"),
+    });
+  await expect(page.getByRole("alert")).toContainText(
+    "Elegí un archivo Markdown .md.",
+  );
+  await page
+    .getByLabel("Markdown original", { exact: true })
+    .fill(
+      fixture
+        .replace("Perception +6", "Perception +7")
+        .replace("Passive Perception 16", "Passive Perception 17"),
+    );
+  const card = page
+    .locator(".review-card")
+    .filter({ has: page.getByText("Percepción", { exact: true }) });
+  await expect(card).toContainText(
+    "El valor original no tiene una fórmula estándar única",
+  );
+  await card.getByLabel("Característica utilizada").selectOption("WIS");
+  await card.getByLabel("Aporte de PB").selectOption("2");
+  await card.getByLabel("Bono fijo confirmado").fill("1");
+  await card.getByLabel("Motivo de esta decisión").fill("Sentidos agudos");
+  await card.getByRole("button", { name: "Confirmar decisión" }).click();
+  await expect(page.locator(".statblock")).toContainText("Perception +9");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  const downloading = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Descargar PNG", exact: true })
+    .click();
+  const png = await downloading;
+  expect(png.suggestedFilename()).toBe("Bulette_statblock.png");
+  expect(
+    readFileSync((await png.path())!)
+      .subarray(0, 8)
+      .toString("hex"),
+  ).toBe("89504e470d0a1a0a");
+  await png.saveAs("test-results/exported-spanish-bulette.png");
+  await page.screenshot({
+    path: "test-results/spanish-mobile.png",
+    fullPage: true,
+  });
+});

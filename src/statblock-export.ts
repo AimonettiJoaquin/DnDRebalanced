@@ -1,3 +1,4 @@
+import { translate, type Locale } from "./i18n";
 export type StatBlockFormat = "png" | "pdf";
 const paper = "#f3e5c9";
 
@@ -70,6 +71,7 @@ export async function downloadStatBlock(
   node: HTMLElement,
   format: StatBlockFormat,
   basename: string,
+  locale: Locale = "en",
 ): Promise<string> {
   // Snapshot this creature, independent of subsequent edits or the selected tab.
   const stage = document.createElement("div");
@@ -116,7 +118,7 @@ export async function downloadStatBlock(
       compress: true,
     });
     pdf.setProperties({
-      title: `${basename} — converted stat block`,
+      title: translate(`${basename} — converted stat block`, locale),
       creator: "DnD Rebalanced",
     });
     const margin = 12,

@@ -6,6 +6,7 @@ import demo from "./bulette.md?raw";
 import { convert, reviewReport, type Field, type Issue } from "./converter";
 import { downloadStatBlock, type StatBlockFormat } from "./statblock-export";
 import { LanguageProvider, useLanguage } from "./Language";
+import { useTheme } from "./useTheme";
 import { armorName, formulaText, spanishReviewReport } from "./i18n";
 import { ArmorGuide, ArmorOptions, armorOptionLabel } from "./ArmorChoices";
 import {
@@ -75,6 +76,13 @@ function Icon({ name, size = 18 }: { name: string; size?: number }) {
       <>
         <circle cx="12" cy="12" r="9" />
         <path d="M3 12h18M12 3a17 17 0 0 1 0 18 17 17 0 0 1 0-18Z" />
+      </>
+    ),
+    moon: <path d="M20.5 13A9 9 0 0 1 11 3.5 9 9 0 1 0 20.5 13Z" />,
+    sun: (
+      <>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
       </>
     ),
     book: (
@@ -307,6 +315,7 @@ function FormulaEditor({
 
 function App() {
   const { locale, setLocale, t } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
   const [source, setSource] = useState(demo);
   const [settings, setSettings] = useState<Settings>(demoSettings);
   const [isDemo, setIsDemo] = useState(true);
@@ -491,6 +500,18 @@ function App() {
           </span>
         </a>
         <div className="top-actions">
+          <button
+            className="theme-toggle"
+            aria-label={t(
+              theme === "light"
+                ? "Switch to dark mode"
+                : "Switch to light mode",
+            )}
+            onClick={toggleTheme}
+          >
+            <Icon name={theme === "light" ? "moon" : "sun"} size={16} />
+            {t(theme === "light" ? "Dark mode" : "Light mode")}
+          </button>
           <button
             className="language-toggle"
             aria-label={t(
@@ -1529,7 +1550,7 @@ function App() {
         </div>
         {result && !result.marked && (
           <div className="export-stage" aria-hidden="true" inert>
-            <div className="export-sheet" ref={exportSheet}>
+            <div className="export-sheet" data-theme={theme} ref={exportSheet}>
               <div className="export-masthead">
                 <span>DnD Rebalanced</span>
                 <span>{t("D&D 2024 · HOUSE RULES")}</span>

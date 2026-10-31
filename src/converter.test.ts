@@ -123,7 +123,7 @@ describe("Validation and explicit decisions", () => {
     expect(r.ac).toBe(20);
     expect(r.issues).toEqual([]);
     expect(r.markdown).toContain(
-      ">- **Armor Class** 20\n>- **Hit Points** 103",
+      ">- **Armor Class** 20 (natural armor)\n>- **Hit Points** 103",
     );
   });
   it("rejects fractional original PB, including a manual entry", () => {
@@ -480,5 +480,83 @@ describe("Validation and explicit decisions", () => {
     const r = run(src);
     expect(r.issues.some((i) => i.field?.label === "Cooking")).toBe(true);
     expect(r.issues.some((i) => i.label === "Unsupported trait")).toBe(true);
+  });
+});
+describe("AC provenance follows the selected defense", () => {
+  it.each([
+    [{ method: "natural" }, "natural armor"],
+    [{ method: "worn", shield: true }, "Plate + shield"],
+    [
+      { method: "worn", armorId: "half_plate", enhancement: 1 },
+      "Half Plate +1",
+    ],
+    [
+      { method: "worn", enhancement: 2, shield: true, shieldEnhancement: 3 },
+      "Plate +2 + shield +3",
+    ],
+    [{ method: "ordinary", enhancement: 3, shieldEnhancement: 3 }, "unarmored"],
+    [{ method: "monk" }, "monk unarmored defense"],
+    [
+      { method: "barbarian", shield: true },
+      "barbarian unarmored defense + shield",
+    ],
+    [{ method: "mage_armor", slot: 3, enhancement: 3 }, "Mage Armor, level 3"],
+    [
+      {
+        method: "review",
+        manualAC: 19,
+        manualACReason: "Custom force field",
+        shield: true,
+      },
+      "special defense — DM override",
+    ],
+  ] as [Partial<Settings>, string][])(
+    "exports the selected source %j",
+    (selection, label) => {
+      const result = run(fixture, selection);
+      expect(result.markdown).toContain(
+        `**Armor Class** ${result.ac} (${label})`,
+      );
+      expect(result.parsed.source).toBe(fixture);
+    },
+  );
+  it("replaces a previous AC description while preserving inline fields and CRLF", () => {
+    const source = fixture
+      .replace(
+        "**Armor Class** 17",
+        "**AC** 17 (natural armor (stone carapace)) | **Initiative** +0 (10)",
+      )
+      .replace(/\n/g, "\r\n");
+    const result = run(source, { method: "worn", shield: true });
+    expect(result.markdown).toContain(
+      `**AC** ${result.ac} (Plate + shield) | **Initiative** +1 (11)\r\n`,
+    );
+    expect(result.markdown).not.toContain("stone carapace");
+    expect(result.parsed.source).toBe(source);
+  });
+  it("escapes user effect names as plain Markdown text without creating markup or lines", () => {
+    const result = run(fixture, {
+      effects: [
+        { name: "[Blessing](https://example.com)\n**Ward**", value: 2 },
+      ],
+    });
+    expect(result.markdown).toContain(
+      "natural armor + \\[Blessing\\]\\(https://example.com\\) \\*\\*Ward\\*\\* +2",
+    );
+    expect(result.markdown).toContain("**Armor Class** 22");
+  });
+  it("leaves unresolved AC sources intact and regenerates from the immutable source", () => {
+    const source = fixture.replace(
+      "**Armor Class** 17",
+      "**Armor Class** 17 (original armor)",
+    );
+    expect(run(source, { method: "review" }).markdown).toContain(
+      "**Armor Class** 17 (original armor)",
+    );
+    const first = run(source, { method: "worn", enhancement: 1 });
+    expect(run(source, { method: "worn", enhancement: 1 }).markdown).toBe(
+      first.markdown,
+    );
+    expect(first.markdown).not.toContain("original armor");
   });
 });

@@ -216,5 +216,9 @@
   "Average HP · click to adjust": "PV promedio · clic para ajustar",
   "Maximum HP · click to adjust": "PV máximos · clic para ajustar",
   "Converted stat block · Average HP": "Bloque convertido · PV promedio",
-  "Converted stat block · Maximum HP": "Bloque convertido · PV máximos"
+  "Converted stat block · Maximum HP": "Bloque convertido · PV máximos",
+  "Switch to dark mode": "Cambiar a modo oscuro",
+  "Switch to light mode": "Cambiar a modo claro",
+  "Dark mode": "Modo oscuro",
+  "Light mode": "Modo claro"
 }

@@ -154,6 +154,30 @@ export interface ACInput {
   con?: number;
   settings: Settings;
 }
+/** Concise provenance for the selected defense, independent of the original AC. */
+export function defenseSource(s: Settings): string {
+  if (s.method === "review") return "special defense — DM override";
+  let source: string;
+  if (s.method === "natural" || s.method === "worn") {
+    source =
+      s.method === "natural"
+        ? "natural armor"
+        : armor.find((item) => item.id === s.armorId)!.name;
+    if (s.enhancement) source += ` +${s.enhancement}`;
+  } else {
+    source = {
+      ordinary: "unarmored",
+      monk: "monk unarmored defense",
+      barbarian: "barbarian unarmored defense",
+      mage_armor: `Mage Armor, level ${s.slot}`,
+    }[s.method];
+  }
+  if (s.shield)
+    source += ` + shield${s.shieldEnhancement ? ` +${s.shieldEnhancement}` : ""}`;
+  for (const effect of s.effects)
+    source += ` + ${effect.name.replace(/\s+/g, " ")} ${signed(effect.value)}`;
+  return source;
+}
 export function calculateAC({ hd, dex, wis, con, settings: s }: ACInput) {
   const pb = proficiency(hd, s.extendPB);
   const required = (value: number | undefined, name: string) => {

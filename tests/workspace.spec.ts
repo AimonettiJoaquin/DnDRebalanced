@@ -440,13 +440,11 @@ test("Spanish review decisions, validation and visual export stay local and usab
   page,
 }) => {
   await page.getByRole("button", { name: "Switch to Spanish" }).click();
-  await page
-    .getByLabel("Cargar archivo Markdown")
-    .setInputFiles({
-      name: "wrong.txt",
-      mimeType: "text/plain",
-      buffer: Buffer.from("x"),
-    });
+  await page.getByLabel("Cargar archivo Markdown").setInputFiles({
+    name: "wrong.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("x"),
+  });
   await expect(page.getByRole("alert")).toContainText(
     "Elegí un archivo Markdown .md.",
   );
@@ -487,6 +485,157 @@ test("Spanish review decisions, validation and visual export stay local and usab
   await png.saveAs("test-results/exported-spanish-bulette.png");
   await page.screenshot({
     path: "test-results/spanish-mobile.png",
+    fullPage: true,
+  });
+});
+
+test("AC provenance updates preview, Markdown and visual exports without retaining old armor", async ({
+  page,
+}) => {
+  await page
+    .getByLabel("Source Markdown", { exact: true })
+    .fill(
+      fixture.replace(
+        "**Armor Class** 17",
+        "**Armor Class** 17 (natural armor)",
+      ),
+    );
+  await page
+    .getByRole("combobox", { name: "Defense method", exact: true })
+    .selectOption("worn");
+  await page
+    .getByRole("combobox", { name: "Armor", exact: true })
+    .selectOption("half_plate");
+  await page
+    .getByRole("combobox", { name: "Enhancement", exact: true })
+    .selectOption("1");
+  await page.getByLabel("Equip shield", { exact: true }).check();
+  await page
+    .getByRole("combobox", { name: "Shield enhancement", exact: true })
+    .selectOption("2");
+  const acLine = "Armor Class 23 (Half Plate +1 + shield +2)";
+  await expect(page.locator(".statblock")).toContainText(acLine);
+  await expect(page.locator(".statblock")).not.toContainText("natural armor");
+  await expect(page.locator(".export-statblock")).toContainText(acLine);
+  await page.getByRole("tab", { name: "Markdown", exact: true }).click();
+  await expect(
+    page.getByLabel("Converted Markdown", { exact: true }),
+  ).toHaveValue(/\*\*Armor Class\*\* 23 \(Half Plate \+1 \+ shield \+2\)/);
+  await page
+    .getByRole("button", { name: "Copy Markdown", exact: true })
+    .click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
+    "**Armor Class** 23 (Half Plate +1 + shield +2)",
+  );
+});
+
+test("theme toggle preserves the conversion, is localized and remembers the chosen appearance", async ({
+  page,
+}) => {
+  await page.getByRole("tab", { name: "Markdown", exact: true }).click();
+  const original = await page
+    .getByLabel("Source Markdown", { exact: true })
+    .inputValue();
+  const converted = await page
+    .getByLabel("Converted Markdown", { exact: true })
+    .inputValue();
+  await page
+    .getByRole("button", { name: "Switch to dark mode", exact: true })
+    .click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator(".export-sheet").first()).toHaveAttribute(
+    "data-theme",
+    "dark",
+  );
+  expect(
+    await page
+      .locator(".panel")
+      .first()
+      .evaluate((node) => getComputedStyle(node).backgroundColor),
+  ).toBe("rgb(44, 37, 31)");
+  await expect(page.getByLabel("Source Markdown", { exact: true })).toHaveValue(
+    original,
+  );
+  await expect(
+    page.getByLabel("Converted Markdown", { exact: true }),
+  ).toHaveValue(converted);
+  await page.getByRole("button", { name: "Switch to Spanish" }).click();
+  await expect(
+    page.getByRole("button", { name: "Cambiar a modo claro" }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("html")).toHaveAttribute("lang", "es");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.screenshot({
+    path: "test-results/dark-mobile.png",
+    fullPage: true,
+  });
+  const downloading = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Descargar PNG", exact: true })
+    .click();
+  const png = await downloading;
+  await png.saveAs("test-results/exported-dark-bulette.png");
+  // Decode the actual downloaded file to verify that the exported theme matches.
+  const imageData = readFileSync((await png.path())!).toString("base64");
+  const pixel = await page.evaluate(async (data) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${data}`;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext("2d")!;
+    context.drawImage(image, 20, 20, 1, 1, 0, 0, 1, 1);
+    return Array.from(context.getImageData(0, 0, 1, 1).data);
+  }, imageData);
+  expect(pixel).toEqual([39, 33, 28, 255]);
+  await page.getByRole("button", { name: "Cambiar a modo claro" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Cambiar a modo oscuro" }),
+  ).toBeVisible();
+});
+
+test("system dark preference and blocked storage still allow switching and paginated dark PDFs", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "localStorage", {
+      get() {
+        throw new DOMException("Storage unavailable", "SecurityError");
+      },
+    });
+  });
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await page.locator(".source-disclosure > summary").click();
+  const extra = Array.from(
+    { length: 20 },
+    (_, i) =>
+      `>***Field Note ${i + 1}.*** This creature moves through deep stone passages and guards its territory until the final intruder leaves.\n>\n`,
+  ).join("");
+  await page
+    .getByLabel("Source Markdown", { exact: true })
+    .fill(fixture + "\n>### Field Notes\n" + extra);
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PDF", exact: true }).click();
+  const pdf = await downloading;
+  const contents = readFileSync((await pdf.path())!, "latin1");
+  expect(
+    contents.match(/\/Type \/Page\b/g)?.length ?? 0,
+  ).toBeGreaterThanOrEqual(3);
+  await pdf.saveAs("test-results/exported-dark-long-creature.pdf");
+  await page.screenshot({
+    path: "test-results/dark-desktop.png",
     fullPage: true,
   });
 });

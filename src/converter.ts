@@ -3,6 +3,7 @@ import {
   type Ability,
   type Settings,
   calculateAC,
+  defenseSource,
   modifier,
   proficiency,
   roundScore,
@@ -60,7 +61,7 @@ export interface Parsed {
   issues: Issue[];
   pbEntries: { value: number; span: Span }[];
   cr?: number;
-  ac?: { value: number; span: Span };
+  ac?: { value: number; span: Span; descriptionSpan?: Span };
   hp?: { total: number; count: number; size: number; flat: number; span: Span };
   marked: boolean;
 }
@@ -322,11 +323,29 @@ export function parseMarkdown(source: string): Parsed {
           "Armor Class",
           "Multiple AC entries require a single source entry.",
         );
-      else
+      else {
         p.ac = {
           value: Number(ac[1]),
           span: spanOf(offset + ac.index! + ac[0].lastIndexOf(ac[1]), ac[1]),
         };
+        // Replace only an immediately following, balanced AC annotation. Keep
+        // the rest of the line (including other fields and Markdown) intact.
+        const tail = line.slice(ac.index! + ac[0].length);
+        const opening = tail.match(/^[ \t]*\(/);
+        if (opening) {
+          let depth = 1;
+          for (let i = opening[0].length; i < tail.length; i++) {
+            if (tail[i] === "(") depth++;
+            if (tail[i] === ")" && --depth === 0) {
+              p.ac.descriptionSpan = {
+                start: p.ac.span.end,
+                end: p.ac.span.end + i + 1,
+              };
+              break;
+            }
+          }
+        }
+      }
     }
     if (/\*\*(?:Hit Points|HP)\*\*/i.test(line)) {
       const hp = line.match(/\*\*(?:Hit Points|HP)\*\*\s*(\d+)\s*\(([^)]+)\)/i);
@@ -740,7 +759,19 @@ export function convert(source: string, s: Settings): Result {
         if (
           !p.issues.some((i) => i.id === "duplicate:ac" || i.id === "ac:parse")
         ) {
-          if (p.ac) patch(p.ac.span, String(ac.value));
+          const sourceLabel = defenseSource(s).replace(
+            /[\\`*_{}\[\]()<>!|~]/g,
+            "\\$&",
+          );
+          const acEntry = `${ac.value} (${sourceLabel})`;
+          if (p.ac)
+            patch(
+              {
+                start: p.ac.span.start,
+                end: p.ac.descriptionSpan?.end ?? p.ac.span.end,
+              },
+              acEntry,
+            );
           else {
             const lineStart = source.lastIndexOf("\n", p.hp.span.start) + 1;
             const prefix = source
@@ -748,7 +779,7 @@ export function convert(source: string, s: Settings): Result {
               .replace(/\*\*(?:Hit Points|HP)\*\*\s*$/i, "");
             patch(
               { start: lineStart, end: lineStart },
-              `${prefix}**Armor Class** ${ac.value}${source.includes("\r\n") ? "\r\n" : "\n"}`,
+              `${prefix}**Armor Class** ${acEntry}${source.includes("\r\n") ? "\r\n" : "\n"}`,
             );
           }
           change(

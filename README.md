@@ -64,7 +64,11 @@ Browser tests use `/usr/bin/chromium`. Set `CHROMIUM_PATH` to another Chromium e
 
 Use the **Español / English** button in the header to change the interface language. The preference is remembered in this browser. Controls, guidance, validation, formula review and export annotations are translated; the imported Markdown, user notes and calculated mechanics retain their original values and text. Changing language does not reapply the conversion or change its settings.
 
+Use **Dark mode / Light mode** beside the language button to change the rustic palette. The first visit follows the browser's preferred appearance; an explicit choice is remembered independently of the project and language. PNG and PDF stat blocks use the selected appearance, including dark-mode pagination for long creatures.
+
 The armor selector separates light, medium and heavy armor. Every option shows its custom AC base, DEX cap and applicable PB contribution before selection. A nearby guide explains category ranges, negative DEX, proficiency and additive effects.
+
+Converted AC includes its selected source, for example `20 (natural armor)`, `21 (Plate + shield)` or `21 (Half Plate +1 + shield)`. Enhancement values belong to their own armor or shield, and confirmed additive effects are named. Special overrides are labeled as DM overrides. An immediately following parenthesized source annotation is replaced when recalculating AC, including nested parentheses; unrelated fields and the imported source remain intact. This annotation appears in the preview, Markdown, clipboard and both visual downloads.
 
 1. Drag a `.md` file onto the compact drop zone or choose **Upload .md**. To paste or edit the source, expand **Edit or paste Markdown**. The initial Bulette is the **user-supplied regression fixture**, not verified official content.
 2. Expand **Conversion rules** to choose a defense method and, for natural or worn armor, a physical equivalent. The closed section summarizes the current defense and HP mode. Old AC is an optional comparison, never an input to the defense formula. If missing, a calculated AC line is inserted beside HP.
@@ -99,6 +103,7 @@ Converted Markdown has an inert conversion marker and encoded metadata. Reopenin
 - `src/main.tsx` and `src/style.css`: responsive workspace, safe preview and local file/clipboard actions.
 - `src/statblock-export.ts`: local PNG rendering and paginated PDF export; its rendering libraries load only when requested.
 - `src/Language.tsx`, `src/i18n.ts` and `src/messages*.json`: local English/Spanish interface translation and remembered language preference.
+- `src/useTheme.ts`: remembered light/dark appearance with a browser preference fallback.
 - `src/ArmorChoices.tsx`: grouped armor options and explanations using the existing custom armor data.
 - `src/bulette.md`: exact supplied fixture.
 - `src/*.test.ts` and `tests/workspace.spec.ts`: rule/conversion regressions and real Chromium workflows.

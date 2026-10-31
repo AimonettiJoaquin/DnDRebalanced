@@ -1,6 +1,5 @@
 import { translate, type Locale } from "./i18n";
 export type StatBlockFormat = "png" | "pdf";
-const paper = "#f3e5c9";
 
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -28,6 +27,7 @@ function pageEnd(
   start: number,
   capacity: number,
   breaks: number[],
+  background: number[],
 ) {
   const limit = Math.min(canvas.height, start + capacity);
   if (limit === canvas.height) return limit;
@@ -52,9 +52,11 @@ function pageEnd(
       for (let x = 0; x < width; x++) {
         const i = (y * width + x) * 4;
         if (
-          pixels[i] < 175 &&
-          pixels[i + 1] < 155 &&
-          pixels[i + 2] < 120 &&
+          Math.max(
+            Math.abs(pixels[i] - background[0]),
+            Math.abs(pixels[i + 1] - background[1]),
+            Math.abs(pixels[i + 2] - background[2]),
+          ) > 45 &&
           pixels[i + 3] > 50
         ) {
           clear = false;
@@ -86,6 +88,7 @@ export async function downloadStatBlock(
     const { toCanvas } = await import("html-to-image");
     const width = Math.ceil(snapshot.getBoundingClientRect().width),
       height = Math.ceil(snapshot.scrollHeight);
+    const paper = getComputedStyle(snapshot).backgroundColor;
     if (!width || !height)
       throw new Error("No stat block is available to export.");
     const pixelRatio = Math.min(
@@ -104,6 +107,11 @@ export async function downloadStatBlock(
       backgroundColor: paper,
       skipFonts: true,
     });
+    const background = Array.from(
+      canvas
+        .getContext("2d")!
+        .getImageData(Math.floor(canvas.width / 2), 8, 1, 1).data,
+    ).slice(0, 3);
     const filename = `${basename}_statblock.${format}`;
     if (format === "png") {
       saveBlob(await canvasBlob(canvas), filename);
@@ -139,7 +147,7 @@ export async function downloadStatBlock(
     ].sort((a, b) => a - b);
     const pages: { start: number; end: number }[] = [];
     for (let start = 0; start < canvas.height; ) {
-      const end = pageEnd(canvas, start, capacity, breaks);
+      const end = pageEnd(canvas, start, capacity, breaks, background);
       pages.push({ start, end });
       start = end;
     }

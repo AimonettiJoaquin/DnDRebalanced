@@ -203,6 +203,52 @@ h1 {
   font-size: 13px;
   margin: 10px 0 0;
 }
+.conversion-purpose {
+  margin-top: 18px;
+  border: 1px solid #cbb58a;
+  border-radius: 3px;
+  background: #faf2df99;
+}
+.conversion-purpose > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 12px 16px;
+  color: #705030;
+  font-size: 12px;
+  font-weight: 600;
+  list-style: none;
+}
+.conversion-purpose > summary::-webkit-details-marker {
+  display: none;
+}
+.conversion-purpose > summary svg {
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.conversion-purpose[open] > summary svg {
+  transform: rotate(180deg);
+}
+.purpose-content {
+  padding: 0 16px 15px;
+  color: #765735;
+  font-size: 12px;
+  line-height: 1.85;
+}
+.purpose-content p {
+  margin: 0 0 10px;
+}
+.purpose-content p:last-child {
+  margin-bottom: 0;
+}
+.purpose-content ul {
+  margin: 10px 0;
+  padding-left: 19px;
+}
+.purpose-content li + li {
+  margin-top: 4px;
+}
 .mobile-break {
   display: none;
 }

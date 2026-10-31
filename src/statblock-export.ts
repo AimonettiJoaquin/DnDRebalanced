@@ -117,7 +117,7 @@ export async function downloadStatBlock(
     });
     pdf.setProperties({
       title: `${basename} — converted stat block`,
-      creator: "Encounter Forge",
+      creator: "DnD Rebalanced",
     });
     const margin = 12,
       contentWidth = 186,
@@ -174,7 +174,7 @@ export async function downloadStatBlock(
       pdf.setFont("times", "normal");
       pdf.setFontSize(8);
       pdf.setTextColor(104, 74, 48);
-      pdf.text(`Encounter Forge  |  ${i + 1} / ${pages.length}`, 105, 289, {
+      pdf.text(`DnD Rebalanced  |  ${i + 1} / ${pages.length}`, 105, 289, {
         align: "center",
       });
       slice.width = slice.height = 0;

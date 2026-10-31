@@ -466,7 +466,7 @@ function App() {
             <Icon name="shield" size={24} />
           </span>
           <span>
-            Encounter<span className="brand-light"> Forge</span>
+            DnD<span className="brand-light"> Rebalanced</span>
             <small>THE DM’S WORKBENCH</small>
           </span>
         </a>
@@ -475,20 +475,6 @@ function App() {
             <i />
             All work stays in your browser
           </span>
-          <button
-            className="quiet"
-            onClick={() => {
-              setSource(demo);
-              setSettings(demoSettings());
-              setIsDemo(true);
-              setSourceFileName("Bulette_demo.md");
-              setStatus("User-supplied Bulette demo loaded.");
-              setError("");
-              setExpandedField(null);
-            }}
-          >
-            Load demo
-          </button>
           <button
             className="quiet"
             onClick={() => {
@@ -517,6 +503,38 @@ function App() {
               Convert a complete stat block. Keep every ruling in sight.
             </p>
           </div>
+          <details className="conversion-purpose">
+            <summary>
+              About this conversion <Icon name="chevron" size={16} />
+            </summary>
+            <div className="purpose-content">
+              <p>
+                Adapt enemies to your armor house rules so defense grows with
+                proficiency. The design aims broadly for AC around 15 + PB
+                before shields and enhancements, while attacks commonly sit
+                around +5 + PB. These are targets, not universal caps; a
+                conversion can intentionally make an enemy tougher.
+              </p>
+              <ul>
+                <li>
+                  Use the unchanged Hit Dice count, rather than CR, to determine
+                  proficiency.
+                </li>
+                <li>
+                  Round the six ability scores upward to even numbers, then
+                  recalculate HP and supported dependent bonuses.
+                </li>
+                <li>
+                  Choose a physical defense equivalent and review uncertain
+                  formulas with the DM.
+                </li>
+              </ul>
+              <p>
+                CR, XP, movement and damage dice stay unchanged. CR is not
+                reassessed, and the average or maximum setting affects HP only.
+              </p>
+            </div>
+          </details>
           <div className="workflow">
             <span className="active">
               01 <b>Import</b>
@@ -1401,7 +1419,7 @@ function App() {
           <div className="export-stage" aria-hidden="true" inert>
             <div className="export-sheet" ref={exportSheet}>
               <div className="export-masthead">
-                <span>ENCOUNTER FORGE</span>
+                <span>DnD Rebalanced</span>
                 <span>D&D 2024 · HOUSE RULES</span>
               </div>
               {!!result.issues.length && (

@@ -1,4 +1,4 @@
-# Encounter Forge
+# DnD Rebalanced
 
 A client-side Markdown enemy converter for the supplied D&D 2024 armor house rules. Built with React, TypeScript and Vite. No application backend, API key, model or monster database.
 
